@@ -5,6 +5,7 @@ import '../../widgets/liquid_background.dart';
 import '../../widgets/auth/glass_text_field.dart';
 import '../../widgets/auth/glass_button.dart';
 import '../../providers/auth_provider.dart';
+import '../../config/supabase_config.dart';
 import 'login_page.dart';
 
 class SignupPage extends StatefulWidget {
@@ -89,11 +90,13 @@ class _SignupPageState extends State<SignupPage> {
   }
 
   Widget _buildSuccessMessage() {
+    final requireConfirm = SupabaseConfig.requireEmailConfirmation;
+    
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Icon(
-          Icons.check_circle_outline,
+          requireConfirm ? Icons.check_circle_outline : Icons.celebration,
           size: 80,
           color: Colors.white,
         ).animate().scale(duration: 600.ms),
@@ -101,8 +104,8 @@ class _SignupPageState extends State<SignupPage> {
         const SizedBox(height: 24),
         
         Text(
-          'Check Your Email',
-          style: TextStyle(
+          requireConfirm ? 'Check Your Email' : 'Account Created!',
+          style: const TextStyle(
             color: Colors.white,
             fontSize: 28,
             fontWeight: FontWeight.bold,
@@ -113,8 +116,10 @@ class _SignupPageState extends State<SignupPage> {
         const SizedBox(height: 16),
         
         Text(
-          'We\'ve sent you a confirmation link.\nPlease check your email to verify your account.',
-          style: TextStyle(
+          requireConfirm 
+            ? 'We\'ve sent you a confirmation link.\nPlease check your email to verify your account.'
+            : 'Your account has been successfully created.\nYou can now sign in to your account.',
+          style: const TextStyle(
             color: Colors.white70,
             fontSize: 16,
           ),

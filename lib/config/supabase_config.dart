@@ -25,4 +25,9 @@ class SupabaseConfig {
   }
 
   static SupabaseClient get client => Supabase.instance.client;
+
+  static bool get requireEmailConfirmation {
+    final value = dotenv.env['REQUIRE_EMAIL_CONFIRMATION'];
+    return value?.toLowerCase() != 'false';
+  }
 }

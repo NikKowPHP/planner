@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:glass_kit/glass_kit.dart';
+import 'dart:ui';
 
 class GlassTextField extends StatelessWidget {
   final TextEditingController controller;
@@ -23,54 +23,65 @@ class GlassTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GlassContainer(
-      height: 56,
-      width: double.infinity,
+    return ClipRRect(
       borderRadius: BorderRadius.circular(16),
-      gradient: LinearGradient(
-        colors: [
-          Colors.white.withOpacity(0.1),
-          Colors.white.withOpacity(0.05),
-        ],
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-      ),
-      borderGradient: LinearGradient(
-        colors: [
-          Colors.white.withOpacity(0.2),
-          Colors.white.withOpacity(0.1),
-        ],
-      ),
-      blur: 20,
-      borderWidth: 1,
-      elevation: 3,
-      isFrostedGlass: true,
-      child: TextFormField(
-        controller: controller,
-        obscureText: obscureText,
-        keyboardType: keyboardType,
-        validator: validator,
-        onChanged: onChanged,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 16,
-        ),
-        decoration: InputDecoration(
-          hintText: hintText,
-          hintStyle: TextStyle(
-            color: Colors.white.withOpacity(0.5),
-            fontSize: 16,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            color: Colors.white.withOpacity(0.05),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.2),
+              width: 1,
+            ),
+            gradient: LinearGradient(
+              colors: [
+                Colors.white.withOpacity(0.1),
+                Colors.white.withOpacity(0.05),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
           ),
-          prefixIcon: prefixIcon != null
-              ? Icon(
-                  prefixIcon,
-                  color: Colors.white.withOpacity(0.7),
-                )
-              : null,
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 16,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            child: TextFormField(
+              controller: controller,
+              obscureText: obscureText,
+              keyboardType: keyboardType,
+              validator: validator,
+              onChanged: onChanged,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+              ),
+              decoration: InputDecoration(
+                hintText: hintText,
+                hintStyle: TextStyle(
+                  color: Colors.white.withOpacity(0.5),
+                  fontSize: 16,
+                ),
+                prefixIcon: prefixIcon != null
+                    ? Icon(
+                        prefixIcon,
+                        color: Colors.white.withOpacity(0.7),
+                      )
+                    : null,
+                border: InputBorder.none,
+                errorBorder: InputBorder.none,
+                focusedErrorBorder: InputBorder.none,
+                errorStyle: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 16,
+                ),
+              ),
+            ),
           ),
         ),
       ),

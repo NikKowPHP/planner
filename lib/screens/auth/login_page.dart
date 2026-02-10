@@ -7,6 +7,7 @@ import '../../widgets/auth/glass_button.dart';
 import '../../providers/auth_provider.dart';
 import 'signup_page.dart';
 import 'forgot_password_page.dart';
+import '../../services/logger.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -39,11 +40,13 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      await FileLogger().log('Login button pressed for ${_emailController.text.trim()}');
       await authProvider.signIn(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
     } catch (e) {
+      await FileLogger().error('Login error caught in UI', e);
       setState(() {
         _errorMessage = e.toString().replaceAll('Exception: ', '');
       });

@@ -21,7 +21,7 @@ class GlassButton extends StatelessWidget {
       onTap: isLoading ? null : onPressed,
       child: GlassContainer(
         height: 56,
-        width: double.infinity,
+        // width: double.infinity, // Removed to prevent NaN/Infinity errors with blurs
         borderRadius: BorderRadius.circular(16),
         gradient: LinearGradient(
           colors: [

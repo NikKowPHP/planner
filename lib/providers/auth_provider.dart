@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/auth_service.dart';
+import '../services/logger.dart';
 
 class AuthProvider extends ChangeNotifier {
   final AuthService _authService = AuthService();
@@ -56,11 +57,22 @@ class AuthProvider extends ChangeNotifier {
       _isLoading = true;
       notifyListeners();
       
-      await _authService.signIn(email: email, password: password);
+      await FileLogger().log('Attempting to sign in user: $email');
+      
+      final response = await _authService.signIn(email: email, password: password);
+      
+      // Explicitly set the user to ensure immediate state update
+      if (response.user != null) {
+        _currentUser = response.user;
+        await FileLogger().log('Sign in successful for user: ${response.user!.email}');
+      } else {
+        await FileLogger().log('Sign in response returned null user');
+      }
       
       _isLoading = false;
       notifyListeners();
-    } catch (e) {
+    } catch (e, stack) {
+      await FileLogger().error('Sign in failed', e, stack);
       _isLoading = false;
       notifyListeners();
       rethrow;
