@@ -10,6 +10,7 @@ import '../models/task.dart';
 import '../widgets/task_list_group.dart';
 import '../services/todo_service.dart';
 import '../models/task_list.dart';
+import '../widgets/task_detail_panel.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -29,6 +30,7 @@ class _HomePageState extends State<HomePage> {
   List<Task> _tasks = [];
   List<TaskList> _lists = [];
   bool _isLoading = true;
+  Task? _selectedTask;
 
   // ADD: Date utility to strip time
   DateTime _stripTime(DateTime date) =>
@@ -290,6 +292,68 @@ class _HomePageState extends State<HomePage> {
         await _todoService.updateTask(updatedTask);
       } catch (e) {
         if (mounted) setState(() => _tasks[index] = oldTask);
+      }
+    }
+  }
+
+  void _selectTask(Task task) {
+    setState(() {
+      _selectedTask = task;
+    });
+
+    if (!ResponsiveLayout.isDesktop(context)) {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => FractionallySizedBox(
+          heightFactor: 0.85,
+          child: ClipRRect(
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            child: TaskDetailPanel(
+              task: task,
+              onClose: () => Navigator.pop(context),
+              onUpdate: _updateTaskGeneric,
+              onDelete: (t) {
+                Navigator.pop(context);
+                _deleteTask(t);
+              },
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  void _closeSidePanel() {
+    setState(() {
+      _selectedTask = null;
+    });
+  }
+
+  Future<void> _updateTaskGeneric(Task updatedTask) async {
+    // Optimistic Update
+    final index = _tasks.indexWhere((t) => t.id == updatedTask.id);
+    if (index == -1) return;
+
+    final oldTask = _tasks[index];
+    setState(() {
+      _tasks[index] = updatedTask;
+      if (_selectedTask?.id == updatedTask.id) {
+        _selectedTask = updatedTask;
+      }
+    });
+
+    try {
+      await _todoService.updateTask(updatedTask);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _tasks[index] = oldTask;
+          if (_selectedTask?.id == oldTask.id) {
+            _selectedTask = oldTask;
+          }
+        });
       }
     }
   }
@@ -688,6 +752,21 @@ class _HomePageState extends State<HomePage> {
                 Expanded(
                   child: _buildMainContent(),
                 ),
+                if (_selectedTask != null) ...[
+                  const VerticalDivider(width: 1, color: Colors.white10),
+                  SizedBox(
+                    width: 400,
+                    child: TaskDetailPanel(
+                      task: _selectedTask!,
+                      onClose: _closeSidePanel,
+                      onUpdate: _updateTaskGeneric,
+                      onDelete: (t) {
+                        _closeSidePanel();
+                        _deleteTask(t);
+                      },
+                    ),
+                  ),
+                ],
               ],
             )
           else
@@ -847,7 +926,7 @@ class _HomePageState extends State<HomePage> {
                       title: "Overdue",
                       tasks: overdue,
                       onTaskToggle: _toggleTask,
-                      onTaskTap: (task) => _showEditTaskDialog(task),
+                      onTaskTap: _selectTask,
                       onTaskContextMenu: _showTaskContextMenu,
                     ),
                     const SizedBox(height: 16),
@@ -857,7 +936,7 @@ class _HomePageState extends State<HomePage> {
                       title: "Today",
                       tasks: today,
                       onTaskToggle: _toggleTask,
-                      onTaskTap: (task) => _showEditTaskDialog(task),
+                      onTaskTap: _selectTask,
                       onTaskContextMenu: _showTaskContextMenu,
                     ),
                     const SizedBox(height: 16),
@@ -867,7 +946,7 @@ class _HomePageState extends State<HomePage> {
                       title: "Tomorrow",
                       tasks: tmrw,
                       onTaskToggle: _toggleTask,
-                      onTaskTap: (task) => _showEditTaskDialog(task),
+                      onTaskTap: _selectTask,
                       onTaskContextMenu: _showTaskContextMenu,
                     ),
                     const SizedBox(height: 16),
@@ -877,7 +956,7 @@ class _HomePageState extends State<HomePage> {
                       title: "Next 7 Days",
                       tasks: next7Days,
                       onTaskToggle: _toggleTask,
-                      onTaskTap: (task) => _showEditTaskDialog(task),
+                      onTaskTap: _selectTask,
                       onTaskContextMenu: _showTaskContextMenu,
                     ),
                     const SizedBox(height: 16),
@@ -887,7 +966,7 @@ class _HomePageState extends State<HomePage> {
                       title: "Later",
                       tasks: later,
                       onTaskToggle: _toggleTask,
-                      onTaskTap: (task) => _showEditTaskDialog(task),
+                      onTaskTap: _selectTask,
                       onTaskContextMenu: _showTaskContextMenu,
                     ),
                     const SizedBox(height: 16),
@@ -897,7 +976,7 @@ class _HomePageState extends State<HomePage> {
                       title: "No Date",
                       tasks: noDate,
                       onTaskToggle: _toggleTask,
-                      onTaskTap: (task) => _showEditTaskDialog(task),
+                      onTaskTap: _selectTask,
                       onTaskContextMenu: _showTaskContextMenu,
                     ),
                     const SizedBox(height: 16),
