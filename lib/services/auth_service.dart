@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/supabase_config.dart';
+import '../models/user_profile.dart';
 
 class AuthService {
   final SupabaseClient _supabase = SupabaseConfig.client;
@@ -72,6 +73,25 @@ class AuthService {
       return response;
     } catch (e) {
       rethrow;
+    }
+  }
+  // Get current user profile
+  Future<UserProfile?> getCurrentProfile() async {
+    try {
+      final user = currentUser;
+      if (user == null) return null;
+
+      final data = await _supabase
+          .from('profiles')
+          .select()
+          .eq('id', user.id)
+          .single();
+
+      return UserProfile.fromJson(data);
+    } catch (e) {
+      // Return null or rethrow depending on desired behavior.
+      // For now, let's return null if profile not found (though it should exist via trigger)
+      return null;
     }
   }
 }

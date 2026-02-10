@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import '../widgets/liquid_background.dart';
 import '../widgets/glass_card.dart';
@@ -7,7 +6,8 @@ import '../widgets/glass_navigation_bar.dart';
 import '../widgets/glass_sidebar.dart';
 import '../widgets/responsive_layout.dart';
 import '../providers/auth_provider.dart';
-import 'details_page.dart';
+import '../models/task.dart';
+import '../widgets/task_list_group.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -18,37 +18,50 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
+  final TextEditingController _taskController = TextEditingController();
+
+  // Mock data for now
+  final List<Task> _mockTasks = [
+    Task(id: '1', userId: '1', title: 'Find delivery service', priority: 0),
+    Task(id: '2', userId: '1', title: 'Car license', priority: 0),
+    Task(
+      id: '3',
+      userId: '1',
+      title: 'set the backups for the dbs',
+      priority: 0,
+    ),
+  ];
+
+  final List<Task> _mockCompletedTasks = [
+    Task(
+      id: '4',
+      userId: '1',
+      title: 'Create document for Emma',
+      isCompleted: true,
+    ),
+    Task(
+      id: '5',
+      userId: '1',
+      title: 'find the sponge big for cleaning',
+      isCompleted: true,
+    ),
+    Task(
+      id: '6',
+      userId: '1',
+      title: 'find the rooms / house',
+      isCompleted: true,
+    ),
+    Task(id: '7', userId: '1', title: 'workout', isCompleted: true),
+  ];
 
   @override
   Widget build(BuildContext context) {
+    // ignore: unused_local_variable
     final authProvider = Provider.of<AuthProvider>(context);
-    final userEmail = authProvider.currentUser?.email ?? 'User';
     final isDesktop = ResponsiveLayout.isDesktop(context);
 
     return Scaffold(
       extendBody: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: !isDesktop
-            ? Text(
-          userEmail,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-          ),
-              )
-            : null, // Hide title on desktop as it can be in sidebar or header
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.white),
-            onPressed: () async {
-              await authProvider.signOut();
-            },
-            tooltip: 'Logout',
-          ),
-        ],
-      ),
       body: Stack(
         children: [
           // Background
@@ -67,21 +80,7 @@ class _HomePageState extends State<HomePage> {
                   },
                 ),
                 Expanded(
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 800),
-                      child: ListView(
-                        padding: const EdgeInsets.all(32),
-                        children: [
-                          _buildHeader(),
-                          const SizedBox(height: 32),
-                          _buildFeaturedCard(),
-                          const SizedBox(height: 24),
-                          _buildRecentActivity(),
-                        ],
-                      ),
-                    ),
-                  ),
+                  child: _buildMainContent(),
                 ),
               ],
             )
@@ -91,22 +90,7 @@ class _HomePageState extends State<HomePage> {
                 SafeArea(
                   bottom: false,
                   child: ResponsiveLayout(
-                    child: ListView(
-                      padding: const EdgeInsets.fromLTRB(
-                        24,
-                        24,
-                        24,
-                        120,
-                      ), // Bottom padding for nav bar
-                      children: [
-                        const SizedBox(height: 20),
-                        _buildHeader(),
-                        const SizedBox(height: 32),
-                        _buildFeaturedCard(),
-                        const SizedBox(height: 24),
-                        _buildRecentActivity(),
-                      ],
-                    ),
+                    child: _buildMainContent(),
                   ),
                 ),
                 GlassNavigationBar(
@@ -124,147 +108,93 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildHeader() {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final userName = authProvider.currentUser?.email?.split('@')[0] ?? 'User';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          "Welcome back,",
-          style: TextStyle(
-            color: Colors.white70,
-            fontSize: 16,
-          ),
-        ).animate().fadeIn(duration: 600.ms).slideX(begin: -0.2, end: 0),
-        
-        Text(
-          userName,
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 32,
-            fontWeight: FontWeight.bold,
-          ),
-        ).animate().fadeIn(delay: 200.ms, duration: 600.ms).slideX(begin: -0.2, end: 0),
-      ],
-    );
-  }
-
-  Widget _buildFeaturedCard() {
-    return GlassCard(
-      height: 200,
-          // width: double.infinity, // Removed to fix Infinity error and respect constraints
+  Widget _buildMainContent() {
+    return Padding(
+      padding: const EdgeInsets.all(24.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+          // Header
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Icon(Icons.credit_card, color: Colors.white, size: 32),
-              Icon(Icons.wifi, color: Colors.white70),
+              Row(
+                children: [
+                  const Icon(Icons.menu, color: Colors.white, size: 28),
+                  const SizedBox(width: 16),
+                  const Text(
+                    "All",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.sort, color: Colors.white),
+                    onPressed: () {},
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.more_horiz, color: Colors.white),
+                    onPressed: () {},
+                  ),
+                ],
+              ),
             ],
           ),
-          Text(
-            "**** **** **** 4242",
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.8),
-              fontSize: 22,
-              letterSpacing: 2,
+          const SizedBox(height: 24),
+
+          // Add Task Input
+          GlassCard(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: TextField(
+              controller: _taskController,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                hintText: '+ Add task to "Inbox"',
+                hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
+              ),
+              onSubmitted: (value) {
+                // TODO: Implement task addition
+                _taskController.clear();
+              },
             ),
           ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("Balance", style: TextStyle(color: Colors.white60, fontSize: 12)),
-                  Text("\$12,450.00", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                ],
-              ),
-               Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("Exp", style: TextStyle(color: Colors.white60, fontSize: 12)),
-                  Text("12/28", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                ],
-              ),
-            ],
+          const SizedBox(height: 24),
+
+          // Task Lists
+          Expanded(
+            child: ListView(
+              children: [
+                TaskListGroup(
+                  title: "No Date",
+                  tasks: _mockTasks,
+                  onTaskToggle: (task, val) {
+                    setState(() {
+                      // Mock toggle
+                    });
+                  },
+                ),
+                const SizedBox(height: 24),
+                TaskListGroup(
+                  title: "Completed",
+                  tasks: _mockCompletedTasks,
+                  onTaskToggle: (task, val) {
+                    setState(() {
+                      // Mock toggle
+                    });
+                  },
+                ),
+              ],
+            ),
           ),
         ],
       ),
-    ).animate().fadeIn(delay: 400.ms, duration: 800.ms).scale(begin: const Offset(0.9, 0.9), end: const Offset(1, 1));
-  }
-
-  Widget _buildRecentActivity() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          "Recent Activity",
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-          ),
-        ).animate().fadeIn(delay: 600.ms, duration: 600.ms),
-        const SizedBox(height: 16),
-        _buildActivityItem("Netflix Subscription", "- \$15.99", Icons.movie_creation_outlined),
-        _buildActivityItem("Spotify Premium", "- \$9.99", Icons.music_note_outlined),
-        _buildActivityItem("Apple Store", "- \$999.00", Icons.phone_iphone_outlined),
-      ],
     );
   }
-
-  Widget _buildActivityItem(String title, String amount, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: GestureDetector(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => DetailsPage(
-                title: title,
-                amount: amount,
-                icon: icon,
-              ),
-            ),
-          );
-        },
-        child: GlassCard(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Hero(
-                tag: title,
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(icon, color: Colors.white, size: 20),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(color: Colors.white, fontSize: 16),
-                ),
-              ),
-              Text(
-                amount,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-        ),
-      ),
-    ).animate().fadeIn(delay: 800.ms, duration: 600.ms).slideY(begin: 0.2, end: 0);
-  }
-
 }

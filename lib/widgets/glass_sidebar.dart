@@ -41,24 +41,61 @@ class GlassSidebar extends StatelessWidget {
 
             // Navigation Items
             _SidebarItem(
-              icon: Icons.home_rounded,
-              label: 'Home',
+              icon: Icons
+                  .calendar_today_rounded, // Changed icon for "All" (or similar)
+              label: 'All',
+              count: 3, // Mock count
               isSelected: selectedIndex == 0,
               onTap: () => onItemSelected(0),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
             _SidebarItem(
-              icon: Icons.explore_rounded,
-              label: 'Explore',
+              icon: Icons.sunny,
+              label: 'Today',
+              count: 5,
               isSelected: selectedIndex == 1,
               onTap: () => onItemSelected(1),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
             _SidebarItem(
-              icon: Icons.person_rounded,
-              label: 'Profile',
+              icon: Icons.calendar_month,
+              label: 'Next 7 Days',
+              count: 5,
               isSelected: selectedIndex == 2,
               onTap: () => onItemSelected(2),
+            ),
+            const SizedBox(height: 8),
+            _SidebarItem(
+              icon: Icons.inbox_rounded,
+              label: 'Inbox',
+              count: 3,
+              isSelected: selectedIndex == 3,
+              onTap: () => onItemSelected(3),
+            ),
+            const SizedBox(height: 8),
+            _SidebarItem(
+              icon: Icons.article_outlined,
+              label: 'Summary',
+              isSelected: selectedIndex == 4,
+              onTap: () => onItemSelected(4),
+            ),
+
+            const SizedBox(height: 32),
+            const Text(
+              "Lists",
+              style: TextStyle(
+                color: Colors.white38,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _SidebarItem(
+              icon: Icons.list,
+              label: 'Clearing',
+              isSelected: selectedIndex == 5,
+              onTap: () => onItemSelected(5),
+              color: Colors.blueAccent,
             ),
             
             const Spacer(),
@@ -76,12 +113,16 @@ class _SidebarItem extends StatelessWidget {
   final String label;
   final bool isSelected;
   final VoidCallback onTap;
+  final int? count;
+  final Color? color;
 
   const _SidebarItem({
     required this.icon,
     required this.label,
     required this.isSelected,
     required this.onTap,
+    this.count,
+    this.color,
   });
 
   @override
@@ -91,35 +132,41 @@ class _SidebarItem extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
         decoration: BoxDecoration(
           color: isSelected 
               ? GlassTheme.accentColor.withOpacity(0.2) 
               : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected 
-                ? GlassTheme.accentColor.withOpacity(0.3) 
-                : Colors.transparent,
-            width: 1,
-          ),
+          borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           children: [
             Icon(
               icon,
-              color: isSelected ? GlassTheme.accentColor : Colors.white70,
-              size: 24,
+              color:
+                  color ??
+                  (isSelected ? GlassTheme.accentColor : Colors.white70),
+              size: 20,
             ),
-            const SizedBox(width: 16),
-            Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? Colors.white : Colors.white70,
-                fontSize: 16,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : Colors.white70,
+                  fontSize: 14,
+                  fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
+                ),
               ),
             ),
+            if (count != null)
+              Text(
+                '$count',
+                style: TextStyle(
+                  color: isSelected ? Colors.white : Colors.white38,
+                  fontSize: 12,
+                ),
+              ),
           ],
         ),
       ),
