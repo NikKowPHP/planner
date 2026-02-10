@@ -121,6 +121,15 @@ class TaskItem extends StatelessWidget {
                 ),
               ),
             ),
+
+            // More Options Button
+            GestureDetector(
+              onTapUp: (details) => onContextMenu?.call(details),
+              child: Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Icon(Icons.more_vert, size: 20, color: Colors.white38),
+              ),
+            ),
           ],
         ),
       ).animate().fadeIn(duration: 300.ms),
