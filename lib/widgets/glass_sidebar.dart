@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import '../theme/glass_theme.dart';
 import 'glass_card.dart';
 import '../models/custom_filter.dart';
@@ -35,63 +34,33 @@ class GlassSidebar extends StatelessWidget {
     return Container(
       width: 250,
       height: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      padding: const EdgeInsets.only(
+        top: 24,
+        bottom: 24,
+        right: 16,
+      ), // Removed left padding as it sits next to Rail
       child: GlassCard(
         padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 12),
         child: Column(
           children: [
-            // Logo
-            const Icon(
-              Icons.bubble_chart,
-              color: Colors.white,
-              size: 32,
-            )
-                .animate()
-                .scale(duration: 600.ms),
-            const SizedBox(height: 8),
-            const Text(
-              'Glassy',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.2,
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Scrollable Content
+            // Removed Logo and App Name (Moved to Rail)
+            
             Expanded(
               child: CustomScrollView(
                 slivers: [
-                  // Views Section
+                  // Smart Lists Section
                   SliverList(
                     delegate: SliverChildListDelegate([
-                      const _SectionHeaderNoAdd(title: "Views"),
-                      _SidebarItem(
-                        icon: Icons.check_box_outlined,
-                        label: 'Tasks',
-                        isSelected: selectedIndex != 99,
-                        onTap: () {
-                          if (selectedIndex == 99) onItemSelected(0);
-                        },
-                      ),
-                      _SidebarItem(
-                        icon: Icons.calendar_month,
-                        label: 'Calendar',
-                        isSelected: selectedIndex == 99,
-                        onTap: () => onItemSelected(99),
-                        color: Colors.purpleAccent,
-                      ),
-                      const SizedBox(height: 24),
-
-                      const _SectionHeaderNoAdd(title: "Smart Lists"),
+                      _SectionHeader(
+                        title: "Smart Lists",
+                        onAdd: () {},
+                      ), // Dummy add, standard header style
                       _SidebarItem(
                         icon: Icons.calendar_today_rounded,
                         label: 'All',
                         isSelected: selectedIndex == 0,
                         onTap: () => onItemSelected(0),
-                        count: 4,
+                        count: 4, // Todo: wire up actual counts
                       ),
                       _SidebarItem(
                         icon: Icons.sunny,
@@ -114,15 +83,16 @@ class GlassSidebar extends StatelessWidget {
                         onTap: () => onItemSelected(3),
                         count: 4,
                       ),
-
-                      // Filters Section
-                      const SizedBox(height: 24),
-                      _SectionHeader(title: "Filters", onAdd: onAddFilter),
-                      if (customFilters.isEmpty) _FilterPlaceholder(),
                     ]),
                   ),
 
-                  // Filters Dynamic Items
+                  // Filters Section
+                  SliverList(
+                    delegate: SliverChildListDelegate([
+                      const SizedBox(height: 24),
+                      _SectionHeader(title: "Filters", onAdd: onAddFilter),
+                    ]),
+                  ),
                   SliverList(
                     delegate: SliverChildBuilderDelegate((context, index) {
                       final filter = customFilters[index];
@@ -144,15 +114,13 @@ class GlassSidebar extends StatelessWidget {
                     }, childCount: customFilters.length),
                   ),
 
+                  // Lists Section
                   SliverList(
                     delegate: SliverChildListDelegate([
-                      // Lists Section
                       const SizedBox(height: 24),
                       _SectionHeader(title: "Lists", onAdd: onAddList),
                     ]),
                   ),
-
-                  // Lists Dynamic Items
                   SliverList(
                     delegate: SliverChildBuilderDelegate((context, index) {
                       final selectionIdx = 4 + customFilters.length + index;
@@ -175,31 +143,15 @@ class GlassSidebar extends StatelessWidget {
                   SliverList(
                     delegate: SliverChildListDelegate([
                       const SizedBox(height: 24),
-                      _SectionHeader(
-                        title: "Tags",
-                        onAdd: onAddTag ?? () {},
-                      ), // Updated to use onAddTag
-                      if (tags.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.all(8.0),
-                          child: Text(
-                            "No tags yet",
-                            style: TextStyle(
-                              color: Colors.white24,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
+                      _SectionHeader(title: "Tags", onAdd: onAddTag ?? () {}),
                     ]),
                   ),
-                  
-                  // Tags Dynamic Items
                   SliverList(
                     delegate: SliverChildBuilderDelegate((context, index) {
-                      final baseIdx = 4 + userLists.length;
-                      final selectionIdx = baseIdx + index;
+                      final selectionIdx =
+                          4 + customFilters.length + userLists.length + index;
                       return _SidebarItem(
-                        icon: Icons.label_outline, // Tag icon
+                        icon: Icons.label_outline,
                         label: tags[index],
                         isSelected: selectedIndex == selectionIdx,
                         onTap: () => onItemSelected(selectionIdx),
@@ -208,7 +160,7 @@ class GlassSidebar extends StatelessWidget {
                     }, childCount: tags.length),
                   ),
 
-                  // Footer Section (Completed & Trash)
+                  // Footer Section
                   SliverFillRemaining(
                     hasScrollBody: false,
                     child: Column(
@@ -219,16 +171,13 @@ class GlassSidebar extends StatelessWidget {
                         _SidebarItem(
                           icon: Icons.check_circle_outline,
                           label: 'Completed', 
-                          isSelected:
-                              selectedIndex ==
-                              -1, // Special index for Completed
+                          isSelected: selectedIndex == -1,
                           onTap: () => onItemSelected(-1),
                         ),
                         _SidebarItem(
                           icon: Icons.delete_outline,
                           label: 'Trash', 
-                          isSelected:
-                              selectedIndex == -2, // Special index for Trash
+                          isSelected: selectedIndex == -2,
                           onTap: () => onItemSelected(-2),
                         ),
                       ],
@@ -318,52 +267,13 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-class _SectionHeaderNoAdd extends StatelessWidget {
-  final String title;
-  const _SectionHeaderNoAdd({required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 12, right: 4, bottom: 8),
-      child: Text(
-        title,
-        style: const TextStyle(
-          color: Colors.white38,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-}
-
-class _FilterPlaceholder extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: const Text(
-        "Display tasks filtered by list, date, priority, tag, and more",
-        style: TextStyle(color: Colors.white30, fontSize: 12, height: 1.4),
-      ),
-    );
-  }
-}
-
 class _SidebarItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool isSelected;
   final VoidCallback onTap;
   final Color? color;
-  final int? count; // Added count support
+  final int? count;
 
   const _SidebarItem({
     required this.icon,
@@ -384,8 +294,8 @@ class _SidebarItem extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
         margin: const EdgeInsets.only(bottom: 2),
         decoration: BoxDecoration(
-          color: isSelected 
-              ? GlassTheme.accentColor.withValues(alpha: 0.2) 
+          color: isSelected
+              ? GlassTheme.accentColor.withValues(alpha: 0.2)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),

@@ -106,8 +106,10 @@ final filtersProvider = FutureProvider((ref) => ref.read(todoServiceProvider).ge
 
 enum GroupBy { date, priority, list, none }
 enum SortBy { date, priority, title }
+enum AppTab { tasks, calendar, focus }
 
 class HomeViewState {
+  final AppTab activeTab;
   final int selectedIndex;
   final GroupBy groupBy;
   final SortBy sortBy;
@@ -115,6 +117,7 @@ class HomeViewState {
   final Task? selectedTask;
 
   HomeViewState({
+    this.activeTab = AppTab.tasks,
     this.selectedIndex = 0,
     this.groupBy = GroupBy.date,
     this.sortBy = SortBy.date,
@@ -123,6 +126,7 @@ class HomeViewState {
   });
 
   HomeViewState copyWith({
+    AppTab? activeTab,
     int? selectedIndex,
     GroupBy? groupBy,
     SortBy? sortBy,
@@ -131,6 +135,7 @@ class HomeViewState {
     bool nullSelectedTask = false,
   }) {
     return HomeViewState(
+      activeTab: activeTab ?? this.activeTab,
       selectedIndex: selectedIndex ?? this.selectedIndex,
       groupBy: groupBy ?? this.groupBy,
       sortBy: sortBy ?? this.sortBy,
@@ -144,6 +149,7 @@ class HomeViewNotifier extends Notifier<HomeViewState> {
   @override
   HomeViewState build() => HomeViewState();
 
+  void setActiveTab(AppTab tab) => state = state.copyWith(activeTab: tab);
   void setIndex(int index) => state = state.copyWith(selectedIndex: index);
   void setGroupBy(GroupBy group) => state = state.copyWith(groupBy: group);
   void setSortBy(SortBy sort) => state = state.copyWith(sortBy: sort);
@@ -156,12 +162,15 @@ final homeViewProvider = NotifierProvider<HomeViewNotifier, HomeViewState>(HomeV
 // --- Derived State (Selects/Filters) ---
 
 final currentTitleProvider = Provider<String>((ref) {
-  final idx = ref.watch(homeViewProvider.select((s) => s.selectedIndex));
+  final view = ref.watch(homeViewProvider);
+  final activeTab = view.activeTab;
+  final idx = view.selectedIndex;
   final filters = ref.watch(filtersProvider).asData?.value ?? [];
   final lists = ref.watch(listsProvider).asData?.value ?? [];
   final tags = ref.watch(tagsProvider).asData?.value ?? [];
 
-  if (idx == 99) return 'Calendar';
+  if (activeTab == AppTab.focus) return 'Focus';
+  if (activeTab == AppTab.calendar) return 'Calendar';
 
   if (idx == -1) return 'Completed';
   if (idx == -2) return 'Trash';
