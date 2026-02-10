@@ -326,13 +326,15 @@ class _HomePageState extends ConsumerState<HomePage> {
   ) async {
     await _logger.log('UI: Opening Move To Dialog for task ${task.id}');
 
+    // Capture ref-dependent values BEFORE showing the dialog
     final lists = ref.read(listsProvider).value ?? [];
+    final tasksNotifier = ref.read(tasksProvider.notifier);
 
     if (!context.mounted) return;
 
     await showDialog(
       context: context,
-      builder: (context) => Dialog(
+      builder: (dialogContext) => Dialog(
         backgroundColor: const Color(0xFF1E1E1E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         child: Container(
@@ -362,10 +364,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                           style: TextStyle(color: Colors.white),
                         ),
                         onTap: () {
-                          final tasksNotifier = ref.read(
-                            tasksProvider.notifier,
-                          );
-                          Navigator.pop(context);
+                          Navigator.pop(dialogContext);
                           final updated = Task(
                             id: task.id,
                             userId: task.userId,
@@ -395,10 +394,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                             style: const TextStyle(color: Colors.white),
                           ),
                           onTap: () {
-                            final tasksNotifier = ref.read(
-                              tasksProvider.notifier,
-                            );
-                            Navigator.pop(context);
+                            Navigator.pop(dialogContext);
                             final updated = Task(
                               id: task.id,
                               userId: task.userId,
@@ -430,27 +426,29 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   void _showMobileDetailSheet(BuildContext context, WidgetRef ref, Task task) {
+     // Capture ref-dependent values BEFORE showing the bottom sheet
+     final tasksNotifier = ref.read(tasksProvider.notifier);
+     final userLists = ref.read(listsProvider).value ?? [];
+
      showModalBottomSheet(
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
-        builder: (context) => FractionallySizedBox(
+        builder: (sheetContext) => FractionallySizedBox(
            heightFactor: 0.85,
            child: ClipRRect(
               borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
               child: TaskDetailPanel(
                  task: task,
-                 onClose: () => Navigator.pop(context),
-            onUpdate: (t) {
-              final notifier = ref.read(tasksProvider.notifier);
-              _safeAction(() => notifier.updateTask(t), 'Update Mobile');
-            },
-                 onDelete: (t) {
-              final notifier = ref.read(tasksProvider.notifier);
-                    Navigator.pop(context);
-              _safeAction(() => notifier.deleteTask(t), 'Delete Mobile');
+                 onClose: () => Navigator.pop(sheetContext),
+                 onUpdate: (t) {
+                   _safeAction(() => tasksNotifier.updateTask(t), 'Update Mobile');
                  },
-                 userLists: ref.read(listsProvider).value ?? [],
+                 onDelete: (t) {
+                   Navigator.pop(sheetContext);
+                   _safeAction(() => tasksNotifier.deleteTask(t), 'Delete Mobile');
+                 },
+                 userLists: userLists,
               ),
            ),
         ),
@@ -459,6 +457,7 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   void _showTaskContextMenu(BuildContext context, WidgetRef ref, Task task, TapUpDetails details) {
      final pos = details.globalPosition;
+     // Capture ref-dependent values BEFORE showing the menu
      final notifier = ref.read(tasksProvider.notifier);
      
      showMenu(
@@ -487,11 +486,11 @@ class _HomePageState extends ConsumerState<HomePage> {
               Navigator.pop(context);
               _safeAction(() => notifier.createTask(task.title), 'Context: Duplicate');
            },
-        // MODIFIED: Connected the dialog here
-        onMove: () {
-          Navigator.pop(context);
-          _showMoveToDialog(context, ref, task);
-        },
+           // Capture ref eagerly so move dialog doesn't use a stale ref
+           onMove: () {
+             Navigator.pop(context);
+             _showMoveToDialog(context, ref, task);
+           },
            onTags: () { Navigator.pop(context); /* Implement Tag Logic */ },
            onDelete: () { 
               Navigator.pop(context); 
