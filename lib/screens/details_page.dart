@@ -42,7 +42,7 @@ class DetailsPage extends StatelessWidget {
                        child: Container(
                           padding: const EdgeInsets.all(30),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.1),
+                            color: Colors.white.withValues(alpha: 0.1),
                             shape: BoxShape.circle,
                             border: Border.all(color: Colors.white24, width: 2),
                           ),

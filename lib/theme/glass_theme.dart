@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:ui';
 
 class GlassTheme {
   // Colors
@@ -16,7 +15,7 @@ class GlassTheme {
 
   // Borders
   static final BorderSide glassBorder = BorderSide(
-    color: Colors.white.withOpacity(0.2),
+    color: Colors.white.withValues(alpha: 0.2),
     width: 1.5,
   );
 

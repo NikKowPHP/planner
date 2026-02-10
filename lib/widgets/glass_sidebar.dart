@@ -6,11 +6,16 @@ import 'glass_card.dart';
 class GlassSidebar extends StatelessWidget {
   final int selectedIndex;
   final Function(int) onItemSelected;
+  final List<dynamic>
+  userLists; // Using dynamic because TaskList might not be imported here, ideally import it
+  final VoidCallback onAddList;
 
   const GlassSidebar({
     super.key,
     required this.selectedIndex,
     required this.onItemSelected,
+    required this.userLists,
+    required this.onAddList,
   });
 
   @override
@@ -41,10 +46,9 @@ class GlassSidebar extends StatelessWidget {
 
             // Navigation Items
             _SidebarItem(
-              icon: Icons
-                  .calendar_today_rounded, // Changed icon for "All" (or similar)
+              icon: Icons.calendar_today_rounded,
               label: 'All',
-              count: 3, // Mock count
+              // count: 3, // Logic for counts needs to be passed down or calculated
               isSelected: selectedIndex == 0,
               onTap: () => onItemSelected(0),
             ),
@@ -52,7 +56,6 @@ class GlassSidebar extends StatelessWidget {
             _SidebarItem(
               icon: Icons.sunny,
               label: 'Today',
-              count: 5,
               isSelected: selectedIndex == 1,
               onTap: () => onItemSelected(1),
             ),
@@ -60,7 +63,6 @@ class GlassSidebar extends StatelessWidget {
             _SidebarItem(
               icon: Icons.calendar_month,
               label: 'Next 7 Days',
-              count: 5,
               isSelected: selectedIndex == 2,
               onTap: () => onItemSelected(2),
             ),
@@ -68,39 +70,66 @@ class GlassSidebar extends StatelessWidget {
             _SidebarItem(
               icon: Icons.inbox_rounded,
               label: 'Inbox',
-              count: 3,
               isSelected: selectedIndex == 3,
               onTap: () => onItemSelected(3),
             ),
             const SizedBox(height: 8),
-            _SidebarItem(
-              icon: Icons.article_outlined,
-              label: 'Summary',
-              isSelected: selectedIndex == 4,
-              onTap: () => onItemSelected(4),
-            ),
+            // _SidebarItem(
+            //   icon: Icons.article_outlined,
+            //   label: 'Summary',
+            //   isSelected: selectedIndex == 4,
+            //   onTap: () => onItemSelected(4),
+            // ),
 
             const SizedBox(height: 32),
-            const Text(
-              "Lists",
-              style: TextStyle(
-                color: Colors.white38,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  "Lists",
+                  style: TextStyle(
+                    color: Colors.white38,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.add, size: 16, color: Colors.white54),
+                  onPressed: onAddList,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  splashRadius: 16,
+                ),
+              ],
             ),
             const SizedBox(height: 16),
-            _SidebarItem(
-              icon: Icons.list,
-              label: 'Clearing',
-              isSelected: selectedIndex == 5,
-              onTap: () => onItemSelected(5),
-              color: Colors.blueAccent,
+            
+            // User Lists
+            Expanded(
+              child: ListView.builder(
+                itemCount: userLists.length,
+                itemBuilder: (context, index) {
+                  // Offset index by fixed items count (4: All, Today, Next7, Inbox)
+                  // If Summary is kept, offset is 5. Removing Summary for now as per plan/simplification.
+                  final selectionIdx = index + 4;
+                  final list = userLists[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8.0),
+                    child: _SidebarItem(
+                      icon: Icons.list, // Or custom icon from list.icon
+                      label: list.name,
+                      isSelected: selectedIndex == selectionIdx,
+                      onTap: () => onItemSelected(selectionIdx),
+                      color: list.color != null
+                          ? Color(
+                              int.parse(list.color!.replaceAll('#', '0xFF')),
+                            )
+                          : Colors.blueAccent,
+                    ),
+                  );
+                },
+              ),
             ),
-            
-            const Spacer(),
-            
-            // Logout button could go here
           ],
         ),
       ),
@@ -113,7 +142,6 @@ class _SidebarItem extends StatelessWidget {
   final String label;
   final bool isSelected;
   final VoidCallback onTap;
-  final int? count;
   final Color? color;
 
   const _SidebarItem({
@@ -121,7 +149,6 @@ class _SidebarItem extends StatelessWidget {
     required this.label,
     required this.isSelected,
     required this.onTap,
-    this.count,
     this.color,
   });
 
@@ -135,7 +162,7 @@ class _SidebarItem extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
         decoration: BoxDecoration(
           color: isSelected 
-              ? GlassTheme.accentColor.withOpacity(0.2) 
+              ? GlassTheme.accentColor.withValues(alpha: 0.2) 
               : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
@@ -159,14 +186,6 @@ class _SidebarItem extends StatelessWidget {
                 ),
               ),
             ),
-            if (count != null)
-              Text(
-                '$count',
-                style: TextStyle(
-                  color: isSelected ? Colors.white : Colors.white38,
-                  fontSize: 12,
-                ),
-              ),
           ],
         ),
       ),

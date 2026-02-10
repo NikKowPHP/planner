@@ -21,10 +21,12 @@ class FileLogger {
     if (_logFile == null) await init();
     final timestamp = DateTime.now().toIso8601String();
     final logMessage = '[$timestamp] $message\n';
+    // ignore: avoid_print
     print(logMessage); // Also print to console
     try {
       await _logFile?.writeAsString(logMessage, mode: FileMode.append);
     } catch (e) {
+      // ignore: avoid_print
       print('Failed to write log: $e');
     }
   }
@@ -33,10 +35,12 @@ class FileLogger {
     if (_logFile == null) await init();
     final timestamp = DateTime.now().toIso8601String();
     final logMessage = '[$timestamp] ERROR: $message\nError: $error\nStack: $stackTrace\n';
+    // ignore: avoid_print
     print(logMessage); // Also print to console
     try {
       await _logFile?.writeAsString(logMessage, mode: FileMode.append);
     } catch (e) {
+      // ignore: avoid_print
       print('Failed to write log: $e');
     }
   }

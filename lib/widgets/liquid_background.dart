@@ -17,7 +17,7 @@ class LiquidBackground extends StatelessWidget {
           top: -100,
           left: -50,
           child: _AnimatedBlob(
-             color: const Color(0xFF8E2DE2).withOpacity(0.4),
+             color: const Color(0xFF8E2DE2).withValues(alpha: 0.4),
              size: 400,
           ),
         ),
@@ -25,7 +25,7 @@ class LiquidBackground extends StatelessWidget {
           top: 200,
           right: -100,
           child: _AnimatedBlob(
-             color: const Color(0xFF4A00E0).withOpacity(0.4),
+             color: const Color(0xFF4A00E0).withValues(alpha: 0.4),
              size: 350,
              duration: const Duration(seconds: 10),
           ),
@@ -34,7 +34,7 @@ class LiquidBackground extends StatelessWidget {
           bottom: -50,
           left: 50,
            child: _AnimatedBlob(
-             color: const Color(0xFF00C6FB).withOpacity(0.3),
+             color: const Color(0xFF00C6FB).withValues(alpha: 0.3),
              size: 300,
              duration: const Duration(seconds: 12),
           ),
@@ -76,7 +76,7 @@ class _AnimatedBlob extends StatelessWidget {
                 gradient: RadialGradient(
                   colors: [
                     color,
-                    color.withOpacity(0),
+                    color.withValues(alpha: 0),
                   ],
                 ),
                 boxShadow: [

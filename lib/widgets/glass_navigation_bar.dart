@@ -79,7 +79,7 @@ class _NavBarItem extends StatelessWidget {
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: isSelected 
-                  ? GlassTheme.accentColor.withOpacity(0.2) 
+                  ? GlassTheme.accentColor.withValues(alpha: 0.2) 
                   : Colors.transparent,
               shape: BoxShape.circle,
             ),

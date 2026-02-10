@@ -25,16 +25,16 @@ class GlassButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         gradient: LinearGradient(
           colors: [
-            Colors.white.withOpacity(0.2),
-            Colors.white.withOpacity(0.1),
+            Colors.white.withValues(alpha: 0.2),
+            Colors.white.withValues(alpha: 0.1),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderGradient: LinearGradient(
           colors: [
-            Colors.white.withOpacity(0.3),
-            Colors.white.withOpacity(0.2),
+            Colors.white.withValues(alpha: 0.3),
+            Colors.white.withValues(alpha: 0.2),
           ],
         ),
         blur: 20,

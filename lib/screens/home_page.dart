@@ -9,6 +9,7 @@ import '../providers/auth_provider.dart';
 import '../models/task.dart';
 import '../widgets/task_list_group.dart';
 import '../services/todo_service.dart';
+import '../models/task_list.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -17,63 +18,86 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
+
+
 class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
   final TextEditingController _taskController = TextEditingController();
   final TodoService _todoService = TodoService();
   
-  // Cache for tasks
+  // Cache for tasks and lists
   List<Task> _tasks = [];
+  List<TaskList> _lists = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadTasks();
+    _loadData();
   }
 
-  Future<void> _loadTasks() async {
+  Future<void> _loadData() async {
     try {
       setState(() => _isLoading = true);
       final tasks = await _todoService.getTasks();
+      final lists = await _todoService.getLists();
+      
       if (mounted) {
         setState(() {
           _tasks = tasks;
+          _lists = lists;
           _isLoading = false;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        // Show error snackbar
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Error loading tasks: $e')));
+        ).showSnackBar(SnackBar(content: Text('Error loading data: $e')));
       }
     }
   }
+  
+  // Helper to load only tasks (for refresh)
+  Future<void> _loadTasks() async {
+    try {
+      final tasks = await _todoService.getTasks();
+      if (mounted) {
+        setState(() {
+          _tasks = tasks;
+        });
+      }
+    } catch (e) {
+      // Handle silently or show snackbar
+    }
+  }
 
-  Future<void> _createTask(String title) async {
+  Future<void> _createTask(String title, {String? listId}) async {
     if (title.trim().isEmpty) return;
     
     // 1. Optimistic Update: Create temp task
     final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
     final tempTask = Task(
       id: tempId,
-      userId: 'current_user', // Placeholder, ignored by UI or Service usually
+      userId: 'current_user',
       title: title,
+      listId: listId,
       priority: 0,
       isCompleted: false,
     );
 
     setState(() {
-      _tasks.insert(0, tempTask); // Add to top immediately
+      _tasks.insert(0, tempTask);
       _taskController.clear();
     });
 
     try {
       // 2. Perform actual API call
-      final newTask = await _todoService.createTask(title: title);
+      final newTask = await _todoService.createTask(
+        title: title,
+        listId: listId,
+      );
       
       // 3. Replace temp task with real task
       setState(() {
@@ -81,18 +105,19 @@ class _HomePageState extends State<HomePage> {
         if (index != -1) {
           _tasks[index] = newTask;
         } else {
-          // If list changed in between, just add to top
           _tasks.insert(0, newTask);
         }
       });
     } catch (e) {
       // 4. Revert on error
-      setState(() {
-        _tasks.removeWhere((t) => t.id == tempId);
-      });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error creating task: $e')));
+      if (mounted) {
+        setState(() {
+          _tasks.removeWhere((t) => t.id == tempId);
+        });
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error creating task: $e')));
+      }
     }
   }
 
@@ -161,6 +186,122 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _createList() async {
+    final controller = TextEditingController();
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: const Text('New List', style: TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: controller,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+            hintText: 'List Name',
+            hintStyle: TextStyle(color: Colors.white54),
+            enabledBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: Colors.white30),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              if (controller.text.trim().isNotEmpty) {
+                final navigator = Navigator.of(context);
+                final scaffoldMessenger = ScaffoldMessenger.of(context);
+                navigator.pop();
+                try {
+                  final newList = await _todoService.createList(
+                    controller.text.trim(),
+                  );
+                  if (mounted) {
+                    setState(() {
+                      _lists.add(newList);
+                    });
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    scaffoldMessenger.showSnackBar(
+                      SnackBar(content: Text('Error creating list: $e')),
+                    );
+                  }
+                }
+              }
+            },
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Filtering Logic
+  List<Task> get _filteredTasks {
+    switch (_selectedIndex) {
+      case 0: // All
+        return _tasks;
+      case 1: // Today
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        return _tasks.where((t) {
+          if (t.dueDate == null) return false;
+          final tDate = DateTime(
+            t.dueDate!.year,
+            t.dueDate!.month,
+            t.dueDate!.day,
+          );
+          return tDate.isAtSameMomentAs(today);
+        }).toList();
+      case 2: // Next 7 Days
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final nextWeek = today.add(const Duration(days: 7));
+        return _tasks.where((t) {
+          if (t.dueDate == null) return false;
+          final tDate = DateTime(
+            t.dueDate!.year,
+            t.dueDate!.month,
+            t.dueDate!.day,
+          );
+          return !tDate.isBefore(today) && tDate.isBefore(nextWeek);
+        }).toList();
+      case 3: // Inbox (No list assigned)
+        return _tasks.where((t) => t.listId == null).toList();
+      default:
+        // Lists
+        // Index 4 onwards corresponds to _lists[index - 4]
+        final listIndex = _selectedIndex - 4;
+        if (listIndex >= 0 && listIndex < _lists.length) {
+          return _tasks.where((t) => t.listId == _lists[listIndex].id).toList();
+        }
+        return [];
+    }
+  }
+
+  String get _currentTitle {
+    switch (_selectedIndex) {
+      case 0:
+        return 'All';
+      case 1:
+        return 'Today';
+      case 2:
+        return 'Next 7 Days';
+      case 3:
+        return 'Inbox';
+      default:
+        final listIndex = _selectedIndex - 4;
+        if (listIndex >= 0 && listIndex < _lists.length) {
+          return _lists[listIndex].name;
+        }
+        return 'Lists';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // ignore: unused_local_variable
@@ -180,6 +321,8 @@ class _HomePageState extends State<HomePage> {
               children: [
                 GlassSidebar(
                   selectedIndex: _selectedIndex,
+                  userLists: _lists,
+                  onAddList: _createList,
                   onItemSelected: (index) {
                     setState(() {
                       _selectedIndex = index;
@@ -216,13 +359,15 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildMainContent() {
+    final tasksToShow = _filteredTasks;
+
     // Filter tasks based on sections
-    final noDateTasks = _tasks
+    final noDateTasks = tasksToShow
         .where((t) => !t.isCompleted && t.dueDate == null)
         .toList();
-    final completedTasks = _tasks.where((t) => t.isCompleted).toList();
+    final completedTasks = tasksToShow.where((t) => t.isCompleted).toList();
     // For now, put dated tasks in "No Date" or create separate section
-    final datedTasks = _tasks
+    final datedTasks = tasksToShow
         .where((t) => !t.isCompleted && t.dueDate != null)
         .toList();
 
@@ -239,9 +384,9 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   const Icon(Icons.menu, color: Colors.white, size: 28),
                   const SizedBox(width: 16),
-                  const Text(
-                    "All",
-                    style: TextStyle(
+                  Text(
+                    _currentTitle,
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
@@ -278,8 +423,11 @@ class _HomePageState extends State<HomePage> {
             ],
           ),
           const SizedBox(height: 24),
-
-          // Add Task Input
+          
+          // Add Task Input (Only for All, Inbox, or Custom Lists - or maybe everywhere with varying logic?)
+          // For now, default to Inbox logic if 'All' or 'Inbox' is selected.
+          // If a specific list is selected, implementation details for adding to that list are needed.
+          // Let's assume adding task adds to current list if selected, or inbox otherwise.
           GlassCard(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: TextField(
@@ -287,10 +435,24 @@ class _HomePageState extends State<HomePage> {
               style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
                 border: InputBorder.none,
-                hintText: '+ Add task to "Inbox"',
-                hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
+                hintText:
+                    '+ Add task to "${_currentTitle == 'All' || _currentTitle == 'Next 7 Days' || _currentTitle == 'Today' ? 'Inbox' : _currentTitle}"',
+                hintStyle: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.4),
+                ),
               ),
-              onSubmitted: _createTask,
+              onSubmitted: (value) {
+                // Determine listId
+                String? targetListId;
+                if (_selectedIndex >= 4) {
+                  final listIndex = _selectedIndex - 4;
+                  if (listIndex < _lists.length) {
+                    targetListId = _lists[listIndex].id;
+                  }
+                }
+                // Pass targetListId to _createTask (need to refactor _createTask to accept it)
+                _createTask(value, listId: targetListId);
+              },
             ),
           ),
           const SizedBox(height: 24),
@@ -298,7 +460,7 @@ class _HomePageState extends State<HomePage> {
           // Task Lists
           Expanded(
             child: RefreshIndicator(
-              onRefresh: _loadTasks,
+              onRefresh: _loadData,
               child: ListView(
                 children: [
                   if (datedTasks.isNotEmpty) ...[
