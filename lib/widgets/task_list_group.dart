@@ -7,6 +7,7 @@ class TaskListGroup extends StatelessWidget {
   final List<Task> tasks;
   final Function(Task, bool) onTaskToggle;
   final Function(Task)? onTaskTap;
+  final Function(Task)? onTaskLongPress;
 
   const TaskListGroup({
     super.key,
@@ -14,6 +15,7 @@ class TaskListGroup extends StatelessWidget {
     required this.tasks,
     required this.onTaskToggle,
     this.onTaskTap,
+    this.onTaskLongPress,
   });
 
   @override
@@ -58,6 +60,7 @@ class TaskListGroup extends StatelessWidget {
           task: task,
           onToggle: (val) => onTaskToggle(task, val ?? false),
           onTap: () => onTaskTap?.call(task),
+            onLongPress: () => onTaskLongPress?.call(task),
         )),
       ],
     );

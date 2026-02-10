@@ -7,18 +7,21 @@ class TaskItem extends StatelessWidget {
   final Task task;
   final Function(bool?) onToggle;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
 
   const TaskItem({
     super.key,
     required this.task,
     required this.onToggle,
     this.onTap,
+    this.onLongPress,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
+      onLongPress: onLongPress,
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

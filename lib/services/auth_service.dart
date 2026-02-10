@@ -1,9 +1,11 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/supabase_config.dart';
 import '../models/user_profile.dart';
+import '../services/logger.dart';
 
 class AuthService {
   final SupabaseClient _supabase = SupabaseConfig.client;
+  final FileLogger _logger = FileLogger();
 
   // Get current user
   User? get currentUser => _supabase.auth.currentUser;
@@ -20,12 +22,15 @@ class AuthService {
     required String password,
   }) async {
     try {
+      await _logger.log('Signing up user: $email');
       final response = await _supabase.auth.signUp(
         email: email,
         password: password,
       );
+      await _logger.log('Sign up successful for: $email');
       return response;
-    } catch (e) {
+    } catch (e, stack) {
+      await _logger.error('Error signing up user: $email', e, stack);
       rethrow;
     }
   }
@@ -36,12 +41,15 @@ class AuthService {
     required String password,
   }) async {
     try {
+      await _logger.log('Signing in user: $email');
       final response = await _supabase.auth.signInWithPassword(
         email: email,
         password: password,
       );
+      await _logger.log('Sign in successful for: $email');
       return response;
-    } catch (e) {
+    } catch (e, stack) {
+      await _logger.error('Error signing in user: $email', e, stack);
       rethrow;
     }
   }
@@ -49,8 +57,12 @@ class AuthService {
   // Sign out
   Future<void> signOut() async {
     try {
+      final email = currentUser?.email;
+      await _logger.log('Signing out user: $email');
       await _supabase.auth.signOut();
-    } catch (e) {
+      await _logger.log('Sign out successful for: $email');
+    } catch (e, stack) {
+      await _logger.error('Error signing out', e, stack);
       rethrow;
     }
   }
@@ -58,8 +70,15 @@ class AuthService {
   // Reset password
   Future<void> resetPassword({required String email}) async {
     try {
+      await _logger.log('Requesting password reset for: $email');
       await _supabase.auth.resetPasswordForEmail(email);
-    } catch (e) {
+      await _logger.log('Password reset requested for: $email');
+    } catch (e, stack) {
+      await _logger.error(
+        'Error requesting password reset for: $email',
+        e,
+        stack,
+      );
       rethrow;
     }
   }
@@ -67,29 +86,37 @@ class AuthService {
   // Update password
   Future<UserResponse> updatePassword({required String newPassword}) async {
     try {
+      await _logger.log('Updating password');
       final response = await _supabase.auth.updateUser(
         UserAttributes(password: newPassword),
       );
+      await _logger.log('Password updated');
       return response;
-    } catch (e) {
+    } catch (e, stack) {
+      await _logger.error('Error updating password', e, stack);
       rethrow;
     }
   }
+
   // Get current user profile
   Future<UserProfile?> getCurrentProfile() async {
     try {
       final user = currentUser;
       if (user == null) return null;
 
+      await _logger.log('Fetching profile for user: ${user.id}');
       final data = await _supabase
           .from('profiles')
           .select()
           .eq('id', user.id)
           .single();
 
-      return UserProfile.fromJson(data);
-    } catch (e) {
-      // Return null or rethrow depending on desired behavior.
+      final profile = UserProfile.fromJson(data);
+      await _logger.log('Fetched profile for user: ${user.id}');
+      return profile;
+    } catch (e, stack) {
+      await _logger.error('Error fetching profile', e, stack);
+      // Return null or rethrow depending on desired behavior. 
       // For now, let's return null if profile not found (though it should exist via trigger)
       return null;
     }
