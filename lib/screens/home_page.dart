@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../widgets/liquid_background.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/glass_navigation_bar.dart';
+import '../widgets/glass_sidebar.dart';
+import '../widgets/responsive_layout.dart';
 import '../providers/auth_provider.dart';
 import 'details_page.dart';
 
@@ -21,19 +23,22 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final userEmail = authProvider.currentUser?.email ?? 'User';
+    final isDesktop = ResponsiveLayout.isDesktop(context);
 
     return Scaffold(
       extendBody: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: Text(
+        title: !isDesktop
+            ? Text(
           userEmail,
           style: const TextStyle(
             color: Colors.white,
             fontSize: 16,
           ),
-        ),
+              )
+            : null, // Hide title on desktop as it can be in sidebar or header
         actions: [
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.white),
@@ -50,30 +55,70 @@ class _HomePageState extends State<HomePage> {
           const LiquidBackground(),
 
           // Content
-          SafeArea(
-            bottom: false,
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 120), // Bottom padding for nav bar
+          if (isDesktop)
+            Row(
               children: [
-                const SizedBox(height: 20),
-                _buildHeader(),
-                const SizedBox(height: 32),
-                _buildFeaturedCard(),
-                const SizedBox(height: 24),
-                _buildRecentActivity(),
+                GlassSidebar(
+                  selectedIndex: _selectedIndex,
+                  onItemSelected: (index) {
+                    setState(() {
+                      _selectedIndex = index;
+                    });
+                  },
+                ),
+                Expanded(
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 800),
+                      child: ListView(
+                        padding: const EdgeInsets.all(32),
+                        children: [
+                          _buildHeader(),
+                          const SizedBox(height: 32),
+                          _buildFeaturedCard(),
+                          const SizedBox(height: 24),
+                          _buildRecentActivity(),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            )
+          else
+            Stack(
+              children: [
+                SafeArea(
+                  bottom: false,
+                  child: ResponsiveLayout(
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(
+                        24,
+                        24,
+                        24,
+                        120,
+                      ), // Bottom padding for nav bar
+                      children: [
+                        const SizedBox(height: 20),
+                        _buildHeader(),
+                        const SizedBox(height: 32),
+                        _buildFeaturedCard(),
+                        const SizedBox(height: 24),
+                        _buildRecentActivity(),
+                      ],
+                    ),
+                  ),
+                ),
+                GlassNavigationBar(
+                  selectedIndex: _selectedIndex,
+                  onItemSelected: (index) {
+                    setState(() {
+                      _selectedIndex = index;
+                    });
+                  },
+                ),
               ],
             ),
-          ),
-          
-          // Navigation
-          GlassNavigationBar(
-            selectedIndex: _selectedIndex,
-            onItemSelected: (index) {
-              setState(() {
-                _selectedIndex = index;
-              });
-            },
-          ),
         ],
       ),
     );
@@ -109,7 +154,7 @@ class _HomePageState extends State<HomePage> {
   Widget _buildFeaturedCard() {
     return GlassCard(
       height: 200,
-      width: double.infinity,
+          // width: double.infinity, // Removed to fix Infinity error and respect constraints
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,

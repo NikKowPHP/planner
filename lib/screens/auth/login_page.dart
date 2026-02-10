@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../widgets/liquid_background.dart';
 import '../../widgets/auth/glass_text_field.dart';
 import '../../widgets/auth/glass_button.dart';
+import '../../widgets/responsive_layout.dart';
 import '../../providers/auth_provider.dart';
 import 'signup_page.dart';
 import 'forgot_password_page.dart';
@@ -70,9 +71,10 @@ class _LoginPageState extends State<LoginPage> {
           // Content
           SafeArea(
             child: Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Form(
+              child: ResponsiveLayout(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Form(
                   key: _formKey,
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -232,6 +234,7 @@ class _LoginPageState extends State<LoginPage> {
                 ),
               ),
             ),
+          ),
           ),
         ],
       ),
