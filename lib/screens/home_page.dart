@@ -40,7 +40,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     final selectedIndex = ref.watch(homeViewProvider.select((s) => s.selectedIndex));
     final selectedTask = ref.watch(homeViewProvider.select((s) => s.selectedTask));
     final notifier = ref.read(homeViewProvider.notifier);
-    final tasksNotifier = ref.read(tasksProvider.notifier);
+
 
     // Inputs for Sidebar
     final lists = listsAsync.value ?? [];
@@ -64,10 +64,13 @@ class _HomePageState extends ConsumerState<HomePage> {
                   onAddTag: () => _createTag(context, ref),
                   onAddFilter: () => _createFilter(context, ref),
                   onEditFilter: (f) => _editFilter(context, ref, f),
-                  onDeleteFilter: (f) => _safeAction(() async {
-                     await ref.read(todoServiceProvider).deleteFilter(f.id);
-                     ref.invalidate(filtersProvider);
-                  }, 'Delete Filter'),
+                  onDeleteFilter: (f) {
+                    final service = ref.read(todoServiceProvider);
+                    _safeAction(() async {
+                      await service.deleteFilter(f.id);
+                      if (mounted) ref.invalidate(filtersProvider);
+                    }, 'Delete Filter');
+                  },
                   onItemSelected: notifier.setIndex,
                 ),
                 Expanded(child: _buildMainContent(ref)),
@@ -78,9 +81,16 @@ class _HomePageState extends ConsumerState<HomePage> {
                     child: TaskDetailPanel(
                       task: selectedTask,
                       onClose: () => notifier.selectTask(null),
-                      onUpdate: (t) => _safeAction(() => tasksNotifier.updateTask(t), 'Update Task'),
+                      onUpdate: (t) {
+                        final tasksNotifier = ref.read(tasksProvider.notifier);
+                        _safeAction(
+                          () => tasksNotifier.updateTask(t),
+                          'Update Task',
+                        );
+                      },
                       onDelete: (t) {
                          notifier.selectTask(null);
+                        final tasksNotifier = ref.read(tasksProvider.notifier);
                          _safeAction(() => tasksNotifier.deleteTask(t), 'Delete Task');
                       },
                       userLists: lists,
@@ -156,9 +166,10 @@ class _HomePageState extends ConsumerState<HomePage> {
               ),
               onSubmitted: (value) async {
                  if (value.trim().isEmpty) return;
+                final tasksNotifier = ref.read(tasksProvider.notifier);
                  await _safeAction(() async {
-                   await ref.read(tasksProvider.notifier).createTask(value);
-                   _taskController.clear();
+                  await tasksNotifier.createTask(value);
+                  if (mounted) _taskController.clear();
                  }, 'Create Task');
               },
             ),
@@ -189,7 +200,11 @@ class _HomePageState extends ConsumerState<HomePage> {
                            description: task.description, dueDate: task.dueDate, priority: task.priority,
                            tagIds: task.tagIds, isPinned: task.isPinned, isCompleted: val
                          );
-                         _safeAction(() => ref.read(tasksProvider.notifier).updateTask(updated), 'Toggle Task');
+                        final tasksNotifier = ref.read(tasksProvider.notifier);
+                        _safeAction(
+                          () => tasksNotifier.updateTask(updated),
+                          'Toggle Task',
+                        );
                       },
                       onTaskTap: (task) {
                         ref.read(homeViewProvider.notifier).selectTask(task);
@@ -233,10 +248,11 @@ class _HomePageState extends ConsumerState<HomePage> {
            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
            TextButton(onPressed: () {
              if (controller.text.isNotEmpty) {
+                final service = ref.read(todoServiceProvider);
                 Navigator.pop(context);
                 _safeAction(() async {
-                  await ref.read(todoServiceProvider).createList(controller.text);
-                  ref.invalidate(listsProvider);
+                  await service.createList(controller.text);
+                  if (mounted) ref.invalidate(listsProvider);
                 }, 'Create List');
              }
            }, child: const Text('Create')),
@@ -258,10 +274,11 @@ class _HomePageState extends ConsumerState<HomePage> {
            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
            TextButton(onPressed: () {
              if (controller.text.isNotEmpty) {
+                final service = ref.read(todoServiceProvider);
                 Navigator.pop(context);
                 _safeAction(() async {
-                  await ref.read(todoServiceProvider).createTag(controller.text);
-                  ref.invalidate(tagsProvider);
+                  await service.createTag(controller.text);
+                  if (mounted) ref.invalidate(tagsProvider);
                 }, 'Create Tag');
              }
            }, child: const Text('Create')),
@@ -273,9 +290,10 @@ class _HomePageState extends ConsumerState<HomePage> {
   void _createFilter(BuildContext context, WidgetRef ref) {
      showDialog(context: context, builder: (c) => FilterEditorDialog(onSave: (name, criteria) {
         final f = CustomFilter(id: '', userId: '', name: name, criteria: criteria);
+          final service = ref.read(todoServiceProvider);
         _safeAction(() async {
-          await ref.read(todoServiceProvider).createFilter(f);
-          ref.invalidate(filtersProvider);
+            await service.createFilter(f);
+            if (mounted) ref.invalidate(filtersProvider);
         }, 'Create Filter');
      }));
   }
@@ -283,9 +301,10 @@ class _HomePageState extends ConsumerState<HomePage> {
   void _editFilter(BuildContext context, WidgetRef ref, CustomFilter filter) {
      showDialog(context: context, builder: (c) => FilterEditorDialog(filter: filter, onSave: (name, criteria) {
         final f = CustomFilter(id: filter.id, userId: filter.userId, name: name, criteria: criteria, icon: filter.icon, color: filter.color);
+          final service = ref.read(todoServiceProvider);
         _safeAction(() async {
-          await ref.read(todoServiceProvider).updateFilter(f);
-          ref.invalidate(filtersProvider);
+            await service.updateFilter(f);
+            if (mounted) ref.invalidate(filtersProvider);
         }, 'Update Filter');
      }));
   }
@@ -333,6 +352,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                           style: TextStyle(color: Colors.white),
                         ),
                         onTap: () {
+                          final tasksNotifier = ref.read(
+                            tasksProvider.notifier,
+                          );
                           Navigator.pop(context);
                           final updated = Task(
                             id: task.id,
@@ -347,9 +369,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                             listId: null, // Move to Inbox
                           );
                           _safeAction(
-                            () => ref
-                                .read(tasksProvider.notifier)
-                                .updateTask(updated),
+                            () => tasksNotifier.updateTask(updated),
                             'Move to Inbox',
                           );
                         },
@@ -365,6 +385,9 @@ class _HomePageState extends ConsumerState<HomePage> {
                             style: const TextStyle(color: Colors.white),
                           ),
                           onTap: () {
+                            final tasksNotifier = ref.read(
+                              tasksProvider.notifier,
+                            );
                             Navigator.pop(context);
                             final updated = Task(
                               id: task.id,
@@ -379,9 +402,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                               listId: l.id, // Move to specific list
                             );
                             _safeAction(
-                              () => ref
-                                  .read(tasksProvider.notifier)
-                                  .updateTask(updated),
+                              () => tasksNotifier.updateTask(updated),
                               'Move to ${l.name}',
                             );
                           },
@@ -410,10 +431,14 @@ class _HomePageState extends ConsumerState<HomePage> {
               child: TaskDetailPanel(
                  task: task,
                  onClose: () => Navigator.pop(context),
-                 onUpdate: (t) => _safeAction(() => ref.read(tasksProvider.notifier).updateTask(t), 'Update Mobile'),
+            onUpdate: (t) {
+              final notifier = ref.read(tasksProvider.notifier);
+              _safeAction(() => notifier.updateTask(t), 'Update Mobile');
+            },
                  onDelete: (t) {
+              final notifier = ref.read(tasksProvider.notifier);
                     Navigator.pop(context);
-                    _safeAction(() => ref.read(tasksProvider.notifier).deleteTask(t), 'Delete Mobile');
+              _safeAction(() => notifier.deleteTask(t), 'Delete Mobile');
                  },
                  userLists: ref.read(listsProvider).value ?? [],
               ),
