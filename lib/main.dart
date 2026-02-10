@@ -5,6 +5,7 @@ import 'screens/home_page.dart';
 import 'utils/ui_utils.dart';
 import 'config/supabase_config.dart';
 import 'providers/auth_provider.dart';
+import 'providers/home_provider.dart';
 import 'middleware/auth_guard.dart';
 
 void main() async {
@@ -22,8 +23,11 @@ class GlassyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => AuthProvider(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => HomeProvider()),
+      ],
       child: MaterialApp(
         title: 'Glassy App',
         debugShowCheckedModeBanner: false,

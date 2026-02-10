@@ -4,12 +4,14 @@ import '../models/task_list.dart';
 import '../models/tag.dart';
 import '../models/custom_filter.dart';
 import '../services/todo_service.dart';
+import '../services/logger.dart';
 
 enum GroupBy { date, priority, list, none }
 enum SortBy { date, priority, title }
 
 class HomeProvider extends ChangeNotifier {
   final TodoService _todoService = TodoService();
+  final FileLogger _logger = FileLogger();
 
   // Data State
   List<Task> _tasks = [];
@@ -39,6 +41,7 @@ class HomeProvider extends ChangeNotifier {
 
   // Initial Load
   Future<void> loadData() async {
+    await _logger.log('HomeProvider: loadData started');
     _isLoading = true;
     notifyListeners();
     try {
@@ -46,8 +49,11 @@ class HomeProvider extends ChangeNotifier {
       _lists = await _todoService.getLists();
       _tags = await _todoService.getTags();
       _filters = await _todoService.getFilters();
-    } catch (e) {
-      debugPrint('Error loading data: $e');
+      await _logger.log(
+        'HomeProvider: loadData completed. Tasks: ${_tasks.length}, Lists: ${_lists.length}',
+      );
+    } catch (e, stack) {
+      await _logger.error('HomeProvider: loadData failed', e, stack);
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -55,27 +61,34 @@ class HomeProvider extends ChangeNotifier {
   }
 
   // View Actions
-  void setSelectedIndex(int index) {
+  Future<void> setSelectedIndex(int index) async {
+    await _logger.log('HomeProvider: Changing selected index to $index');
     _selectedIndex = index;
     notifyListeners();
   }
 
-  void setGroupBy(GroupBy group) {
+  Future<void> setGroupBy(GroupBy group) async {
+    await _logger.log('HomeProvider: Changing GroupBy to $group');
     _groupBy = group;
     notifyListeners();
   }
 
-  void setSortBy(SortBy sort) {
+  Future<void> setSortBy(SortBy sort) async {
+    await _logger.log('HomeProvider: Changing SortBy to $sort');
     _sortBy = sort;
     notifyListeners();
   }
 
-  void toggleHideCompleted() {
+  Future<void> toggleHideCompleted() async {
+    await _logger.log(
+      'HomeProvider: Toggling hideCompleted. New value: ${!_hideCompleted}',
+    );
     _hideCompleted = !_hideCompleted;
     notifyListeners();
   }
 
-  void selectTask(Task? task) {
+  Future<void> selectTask(Task? task) async {
+    await _logger.log('HomeProvider: Selecting task ${task?.id ?? "None"}');
     _selectedTask = task;
     notifyListeners();
   }
@@ -98,13 +111,16 @@ class HomeProvider extends ChangeNotifier {
       }
     }
     if (_selectedIndex >= filterStartIndex && _selectedIndex < listStartIndex) {
-      return _filters[_selectedIndex - filterStartIndex].name;
+      final idx = _selectedIndex - filterStartIndex;
+      if (idx < _filters.length) return _filters[idx].name;
     }
     if (_selectedIndex >= listStartIndex && _selectedIndex < tagStartIndex) {
-      return _lists[_selectedIndex - listStartIndex].name;
+      final idx = _selectedIndex - listStartIndex;
+      if (idx < _lists.length) return _lists[idx].name;
     }
     if (_selectedIndex >= tagStartIndex && (_selectedIndex - tagStartIndex) < _tags.length) {
-      return '# ${_tags[_selectedIndex - tagStartIndex].name}';
+      final idx = _selectedIndex - tagStartIndex;
+      if (idx < _tags.length) return '# ${_tags[idx].name}';
     }
     return 'Glassy';
   }
@@ -158,11 +174,16 @@ class HomeProvider extends ChangeNotifier {
         case 3: result = activeTasks.where((t) => t.listId == null).toList(); break;
       }
     } else if (_selectedIndex >= filterStartIndex && _selectedIndex < listStartIndex) {
-      final filter = _filters[_selectedIndex - filterStartIndex];
-      result = activeTasks.where((t) => filter.matches(t)).toList();
+      final idx = _selectedIndex - filterStartIndex;
+      if (idx < _filters.length) {
+        result = activeTasks.where((t) => _filters[idx].matches(t)).toList();
+      }
     } else if (_selectedIndex >= listStartIndex && _selectedIndex < tagStartIndex) {
-      final listId = _lists[_selectedIndex - listStartIndex].id;
-      result = activeTasks.where((t) => t.listId == listId).toList();
+      final idx = _selectedIndex - listStartIndex;
+      if (idx < _lists.length) {
+        final listId = _lists[idx].id;
+        result = activeTasks.where((t) => t.listId == listId).toList();
+      }
     } else if (_selectedIndex >= tagStartIndex) {
        final tagIdx = _selectedIndex - tagStartIndex;
        if (tagIdx < _tags.length) {
@@ -184,6 +205,7 @@ class HomeProvider extends ChangeNotifier {
         case SortBy.title: return a.title.compareTo(b.title);
         case SortBy.priority: return b.priority.compareTo(a.priority);
         case SortBy.date: 
+          if (a.dueDate == null && b.dueDate == null) return 0;
            if (a.dueDate == null) return 1; 
            if (b.dueDate == null) return -1;
            return a.dueDate!.compareTo(b.dueDate!);
@@ -198,30 +220,65 @@ class HomeProvider extends ChangeNotifier {
        final nextWeek = now.add(const Duration(days: 7));
 
        for (var t in tasks) {
-         if (t.isCompleted && !_hideCompleted) { (groups['Completed'] ??= []).add(t); continue; }
-         if (t.dueDate == null) { (groups['No Date'] ??= []).add(t); continue; }
+        if (t.isCompleted && !_hideCompleted) {
+          (groups['Completed'] ??= []).add(t);
+          continue;
+        }
+        if (t.dueDate == null) {
+          (groups['No Date'] ??= []).add(t);
+          continue;
+        }
          final d = _stripTime(t.dueDate!);
-         if (d.isBefore(now)) (groups['Overdue'] ??= []).add(t);
-         else if (d.isAtSameMomentAs(now)) (groups['Today'] ??= []).add(t);
-         else if (d.isAtSameMomentAs(tomorrow)) (groups['Tomorrow'] ??= []).add(t);
-         else if (d.isBefore(nextWeek)) (groups['Next 7 Days'] ??= []).add(t);
-         else (groups['Later'] ??= []).add(t);
+        if (d.isBefore(now)) {
+          (groups['Overdue'] ??= []).add(t);
+        } else if (d.isAtSameMomentAs(now)) {
+          (groups['Today'] ??= []).add(t);
+        } else if (d.isAtSameMomentAs(tomorrow)) {
+          (groups['Tomorrow'] ??= []).add(t);
+        } else if (d.isBefore(nextWeek)) {
+          (groups['Next 7 Days'] ??= []).add(t);
+        } else {
+          (groups['Later'] ??= []).add(t);
+        }
        }
-       // Return ordered keys manually if needed, or rely on UI to iterate keys
-       return groups; 
+       
+      // Order keys manually
+      final ordered = <String, List<Task>>{};
+      for (var k in [
+        'Overdue',
+        'Today',
+        'Tomorrow',
+        'Next 7 Days',
+        'Later',
+        'No Date',
+        'Completed',
+      ]) {
+        if (groups.containsKey(k)) ordered[k] = groups[k]!;
+      }
+      return ordered; 
     } else if (_groupBy == GroupBy.priority) {
        for (var t in tasks) {
-         if (t.isCompleted && !_hideCompleted) { (groups['Completed'] ??= []).add(t); continue; }
+        if (t.isCompleted && !_hideCompleted) {
+          (groups['Completed'] ??= []).add(t);
+          continue;
+        }
          String key = 'None';
          if (t.priority == 3) key = 'High';
          if (t.priority == 2) key = 'Medium';
          if (t.priority == 1) key = 'Low';
          (groups[key] ??= []).add(t);
        }
-       return groups;
+      final ordered = <String, List<Task>>{};
+      for (var k in ['High', 'Medium', 'Low', 'None', 'Completed']) {
+        if (groups.containsKey(k)) ordered[k] = groups[k]!;
+      }
+      return ordered;
     } else if (_groupBy == GroupBy.list) {
        for (var t in tasks) {
-          if (t.isCompleted && !_hideCompleted) { (groups['Completed'] ??= []).add(t); continue; }
+        if (t.isCompleted && !_hideCompleted) {
+          (groups['Completed'] ??= []).add(t);
+          continue;
+        }
           String name = 'Inbox';
           if (t.listId != null) {
             try { name = _lists.firstWhere((l) => l.id == t.listId).name; } catch(_) {}
@@ -237,6 +294,7 @@ class HomeProvider extends ChangeNotifier {
 
   // CRUD Operations
   Future<void> createTask(String title) async {
+    await _logger.log('HomeProvider: Creating task "$title"');
     if (title.trim().isEmpty) return;
     
     String? listId;
@@ -252,14 +310,18 @@ class HomeProvider extends ChangeNotifier {
     try {
        final newTask = await _todoService.createTask(title: title, listId: listId, dueDate: dueDate);
        _tasks.insert(0, newTask);
+      await _logger.log(
+        'HomeProvider: Task created successfully: ${newTask.id}',
+      );
        notifyListeners();
-    } catch (e) {
-      debugPrint("Error creating task: $e");
+    } catch (e, stack) {
+      await _logger.error('HomeProvider: Error creating task', e, stack);
       rethrow;
     }
   }
 
   Future<void> updateTask(Task task) async {
+    await _logger.log('HomeProvider: Updating task ${task.id}');
     try {
       final updated = await _todoService.updateTask(task);
       final index = _tasks.indexWhere((t) => t.id == task.id);
@@ -268,56 +330,101 @@ class HomeProvider extends ChangeNotifier {
         if (_selectedTask?.id == updated.id) _selectedTask = updated;
         notifyListeners();
       }
-    } catch (e) { rethrow; }
+      await _logger.log('HomeProvider: Task updated successfully');
+    } catch (e, stack) {
+      await _logger.error('HomeProvider: Error updating task', e, stack);
+      rethrow;
+    }
   }
 
   Future<void> deleteTask(Task task) async {
+    await _logger.log('HomeProvider: Deleting task ${task.id}');
     try {
        await _todoService.deleteTask(task.id);
        final index = _tasks.indexWhere((t) => t.id == task.id);
        if (index != -1) {
           // Simulating soft delete update locally
-          _tasks[index] = Task(
+        final deleted = Task(
              id: task.id, userId: task.userId, title: task.title, 
              isCompleted: task.isCompleted, priority: task.priority,
              deletedAt: DateTime.now(), tagIds: task.tagIds,
              listId: task.listId, dueDate: task.dueDate, isPinned: task.isPinned
           );
+        _tasks[index] = deleted;
           notifyListeners();
        }
-    } catch (e) { rethrow; }
+      await _logger.log('HomeProvider: Task deleted successfully');
+    } catch (e, stack) {
+      await _logger.error('HomeProvider: Error deleting task', e, stack);
+      rethrow;
+    }
   }
 
   Future<void> createList(String name) async {
-    final list = await _todoService.createList(name);
-    _lists.add(list);
-    notifyListeners();
+    await _logger.log('HomeProvider: Creating list "$name"');
+    try {
+      final list = await _todoService.createList(name);
+      _lists.add(list);
+      notifyListeners();
+      await _logger.log('HomeProvider: List created successfully');
+    } catch (e, stack) {
+      await _logger.error('HomeProvider: Error creating list', e, stack);
+      rethrow;
+    }
   }
 
   Future<void> createTag(String name) async {
-    final tag = await _todoService.createTag(name);
-    _tags.add(tag);
-    notifyListeners();
+    await _logger.log('HomeProvider: Creating tag "$name"');
+    try {
+      final tag = await _todoService.createTag(name);
+      _tags.add(tag);
+      notifyListeners();
+      await _logger.log('HomeProvider: Tag created successfully');
+    } catch (e, stack) {
+      await _logger.error('HomeProvider: Error creating tag', e, stack);
+      rethrow;
+    }
   }
 
   Future<void> createFilter(CustomFilter filter) async {
-     final f = await _todoService.createFilter(filter);
-     _filters.add(f);
-     notifyListeners();
+    await _logger.log('HomeProvider: Creating filter "${filter.name}"');
+    try {
+      final f = await _todoService.createFilter(filter);
+      _filters.add(f);
+      notifyListeners();
+      await _logger.log('HomeProvider: Filter created successfully');
+    } catch (e, stack) {
+      await _logger.error('HomeProvider: Error creating filter', e, stack);
+      rethrow;
+    }
   }
 
   Future<void> deleteFilter(String id) async {
-    await _todoService.deleteFilter(id);
-    _filters.removeWhere((f) => f.id == id);
-    if (_selectedIndex >= 4) _selectedIndex = 0; // Reset safe
-    notifyListeners();
+    await _logger.log('HomeProvider: Deleting filter $id');
+    try {
+      await _todoService.deleteFilter(id);
+      _filters.removeWhere((f) => f.id == id);
+      if (_selectedIndex >= 4) _selectedIndex = 0;
+      notifyListeners();
+      await _logger.log('HomeProvider: Filter deleted successfully');
+    } catch (e, stack) {
+      await _logger.error('HomeProvider: Error deleting filter', e, stack);
+      rethrow;
+    }
   }
   
   Future<void> updateFilter(CustomFilter filter) async {
-     final f = await _todoService.updateFilter(filter);
-     final idx = _filters.indexWhere((i) => i.id == filter.id);
-     if (idx != -1) _filters[idx] = f;
-     notifyListeners();
+    await _logger.log('HomeProvider: Updating filter ${filter.id}');
+    try {
+      final f = await _todoService.updateFilter(filter);
+      final idx = _filters.indexWhere((i) => i.id == filter.id);
+      if (idx != -1) _filters[idx] = f;
+      notifyListeners();
+      await _logger.log('HomeProvider: Filter updated successfully');
+    } catch (e, stack) {
+      await _logger.error('HomeProvider: Error updating filter', e, stack);
+      rethrow;
+    }
   }
 
   // Helpers
