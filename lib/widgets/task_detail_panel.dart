@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../models/task.dart';
+import '../models/task_list.dart';
 import '../theme/glass_theme.dart';
 
 class TaskDetailPanel extends StatefulWidget {
@@ -8,6 +9,7 @@ class TaskDetailPanel extends StatefulWidget {
   final Function(Task) onUpdate;
   final Function(Task) onDelete;
   final VoidCallback onClose;
+  final List<TaskList> userLists;
 
   const TaskDetailPanel({
     super.key,
@@ -15,6 +17,7 @@ class TaskDetailPanel extends StatefulWidget {
     required this.onUpdate,
     required this.onDelete,
     required this.onClose,
+    required this.userLists,
   });
 
   @override
@@ -67,6 +70,123 @@ class _TaskDetailPanelState extends State<TaskDetailPanel> {
       isCompleted: isCompleted ?? widget.task.isCompleted,
     );
     widget.onUpdate(updatedTask);
+  }
+
+  void _handleListChange(String? newListId) {
+    final updatedTask = Task(
+      id: widget.task.id,
+      userId: widget.task.userId,
+      listId: newListId,
+      title: widget.task.title,
+      description: widget.task.description,
+      dueDate: widget.task.dueDate,
+      priority: widget.task.priority,
+      isCompleted: widget.task.isCompleted,
+    );
+    widget.onUpdate(updatedTask);
+  }
+
+  String _getCurrentListName() {
+    if (widget.task.listId == null) return 'Inbox';
+    try {
+      return widget.userLists
+          .firstWhere((l) => l.id == widget.task.listId)
+          .name;
+    } catch (e) {
+      return 'Inbox';
+    }
+  }
+
+  Future<void> _showMoveToDialog() async {
+    await showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Container(
+          width: 300,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.drive_file_move_outline,
+                      size: 20,
+                      color: Colors.white70,
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'Move to...',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(color: Colors.white10),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      _buildListOption(null, 'Inbox', Icons.inbox_rounded),
+                      ...widget.userLists.map(
+                        (list) =>
+                            _buildListOption(list.id, list.name, Icons.list),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildListOption(String? listId, String name, IconData icon) {
+    final isSelected = widget.task.listId == listId;
+    return InkWell(
+      onTap: () {
+        Navigator.pop(context);
+        _handleListChange(listId);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        color: isSelected ? Colors.white.withValues(alpha: 0.05) : null,
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: isSelected ? GlassTheme.accentColor : Colors.white70,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                name,
+                style: TextStyle(
+                  color: isSelected ? GlassTheme.accentColor : Colors.white,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ),
+            if (isSelected)
+              Icon(Icons.check, size: 16, color: GlassTheme.accentColor),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _pickDate() async {
@@ -180,10 +300,42 @@ class _TaskDetailPanelState extends State<TaskDetailPanel> {
             ),
             child: Row(
               children: [
-                const Text('Inbox', style: TextStyle(color: Colors.white54)),
+                InkWell(
+                  onTap: _showMoveToDialog,
+                  borderRadius: BorderRadius.circular(4),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          widget.task.listId == null ? Icons.inbox : Icons.list,
+                          size: 16,
+                          color: Colors.white54,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          _getCurrentListName(),
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.arrow_drop_down,
+                          size: 16,
+                          color: Colors.white24,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
                 const Spacer(),
                 Text(
-                  'Created ${_formatDate(DateTime.now())}', // Mock date
+                  'Created ${_formatDate(DateTime.now())}',
                   style: const TextStyle(color: Colors.white24, fontSize: 12),
                 ),
                 const SizedBox(width: 16),

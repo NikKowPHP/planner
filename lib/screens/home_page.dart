@@ -318,6 +318,7 @@ class _HomePageState extends State<HomePage> {
                 Navigator.pop(context);
                 _deleteTask(t);
               },
+              userLists: _lists,
             ),
           ),
         ),
@@ -764,6 +765,7 @@ class _HomePageState extends State<HomePage> {
                         _closeSidePanel();
                         _deleteTask(t);
                       },
+                      userLists: _lists,
                     ),
                   ),
                 ],
