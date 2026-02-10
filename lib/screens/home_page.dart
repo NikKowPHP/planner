@@ -30,6 +30,10 @@ class _HomePageState extends State<HomePage> {
   List<TaskList> _lists = [];
   bool _isLoading = true;
 
+  // ADD: Date utility to strip time
+  DateTime _stripTime(DateTime date) =>
+      DateTime(date.year, date.month, date.day);
+
   @override
   void initState() {
     super.initState();
@@ -73,9 +77,22 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  // MODIFY: Update _createTask to handle dates based on current view
   Future<void> _createTask(String title, {String? listId}) async {
     if (title.trim().isEmpty) return;
     
+    // Determine default date based on selected view
+    DateTime? defaultDate;
+    if (_selectedIndex == 1) {
+      // Today View
+      defaultDate = DateTime.now();
+    }
+    // "Next 7 Days" usually defaults to Today in TickTick, or user picks.
+    // We will default to Today for convenience.
+    else if (_selectedIndex == 2) {
+      defaultDate = DateTime.now();
+    }
+
     // 1. Optimistic Update: Create temp task
     final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
     final tempTask = Task(
@@ -85,6 +102,7 @@ class _HomePageState extends State<HomePage> {
       listId: listId,
       priority: 0,
       isCompleted: false,
+      dueDate: defaultDate, // Set the date
     );
 
     setState(() {
@@ -97,6 +115,7 @@ class _HomePageState extends State<HomePage> {
       final newTask = await _todoService.createTask(
         title: title,
         listId: listId,
+        dueDate: defaultDate, // Pass date to service
       );
       
       // 3. Replace temp task with real task
@@ -118,6 +137,70 @@ class _HomePageState extends State<HomePage> {
           context,
         ).showSnackBar(SnackBar(content: Text('Error creating task: $e')));
       }
+    }
+  }
+
+  // ADD: Method to reschedule/regroup tasks
+  Future<void> _updateTaskDate(Task task, DateTime? newDate) async {
+    final updatedTask = Task(
+      id: task.id,
+      userId: task.userId,
+      listId: task.listId,
+      title: task.title,
+      description: task.description,
+      isCompleted: task.isCompleted,
+      priority: task.priority,
+      dueDate: newDate,
+    );
+
+    // Optimistic update
+    final index = _tasks.indexWhere((t) => t.id == task.id);
+    if (index == -1) return;
+    final oldTask = _tasks[index];
+
+    setState(() {
+      _tasks[index] = updatedTask;
+    });
+
+    try {
+      await _todoService.updateTask(updatedTask);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _tasks[index] = oldTask;
+        });
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Failed to update date')));
+      }
+    }
+  }
+
+  // ADD: Date Picker Dialog
+  Future<void> _showDatePicker(Task task) async {
+    final now = DateTime.now();
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: task.dueDate ?? now,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 5),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Colors.blueAccent,
+              onPrimary: Colors.white,
+              surface: Color(0xFF1E1E1E),
+              onSurface: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (pickedDate != null) {
+      _updateTaskDate(task, pickedDate);
     }
   }
 
@@ -186,6 +269,268 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _setTaskPriority(Task task, int priority) async {
+    final updatedTask = Task(
+      id: task.id,
+      userId: task.userId,
+      listId: task.listId,
+      title: task.title,
+      description: task.description,
+      dueDate: task.dueDate,
+      isCompleted: task.isCompleted,
+      priority: priority,
+    );
+
+    // Optimistic update
+    final index = _tasks.indexWhere((t) => t.id == task.id);
+    if (index != -1) {
+      final oldTask = _tasks[index];
+      setState(() => _tasks[index] = updatedTask);
+      try {
+        await _todoService.updateTask(updatedTask);
+      } catch (e) {
+        if (mounted) setState(() => _tasks[index] = oldTask);
+      }
+    }
+  }
+
+  // ADD: Edit Task Dialog (Title/Description)
+  Future<void> _showEditTaskDialog(Task task) async {
+    final titleController = TextEditingController(text: task.title);
+    final descController = TextEditingController(text: task.description);
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: const Text('Edit Task', style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Title',
+                labelStyle: TextStyle(color: Colors.white70),
+                enabledBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.white30),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: descController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Description',
+                labelStyle: TextStyle(color: Colors.white70),
+                enabledBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.white30),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              if (titleController.text.trim().isNotEmpty) {
+                final updatedTask = Task(
+                  id: task.id,
+                  userId: task.userId,
+                  listId: task.listId,
+                  title: titleController.text.trim(),
+                  description: descController.text.trim(),
+                  dueDate: task.dueDate,
+                  isCompleted: task.isCompleted,
+                  priority: task.priority,
+                );
+                Navigator.pop(context);
+
+                // Optimistic Update
+                final index = _tasks.indexWhere((t) => t.id == task.id);
+                if (index != -1) {
+                  final oldTask = _tasks[index];
+                  setState(() => _tasks[index] = updatedTask);
+                  try {
+                    await _todoService.updateTask(updatedTask);
+                  } catch (e) {
+                    if (mounted) setState(() => _tasks[index] = oldTask);
+                  }
+                }
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ADD: Context Menu Logic
+  void _showTaskContextMenu(Task task, TapUpDetails details) {
+    final isDesktop = ResponsiveLayout.isDesktop(context);
+    final position = details.globalPosition;
+
+    // Menu Items Data
+    final items = [
+      _ContextMenuItem('Edit', Icons.edit, () => _showEditTaskDialog(task)),
+      _ContextMenuItem(
+        'Set Date',
+        Icons.calendar_today,
+        () => _showDatePicker(task),
+      ),
+      _ContextMenuItem('Priority', Icons.flag, () => _showPrioritySheet(task)),
+      _ContextMenuItem(
+        'Delete',
+        Icons.delete_outline,
+        () => _deleteTask(task),
+        isDestructive: true,
+      ),
+    ];
+
+    if (isDesktop) {
+      // Desktop: Popup Menu at cursor
+      showMenu(
+        context: context,
+        position: RelativeRect.fromLTRB(
+          position.dx,
+          position.dy,
+          position.dx + 1,
+          position.dy + 1,
+        ),
+        color: const Color(0xFF1E1E1E),
+        items: items
+            .map(
+              (item) => PopupMenuItem(
+                onTap: item.onTap,
+                child: Row(
+                  children: [
+                    Icon(
+                      item.icon,
+                      color: item.isDestructive
+                          ? Colors.redAccent
+                          : Colors.white70,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      item.title,
+                      style: TextStyle(
+                        color: item.isDestructive
+                            ? Colors.redAccent
+                            : Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+            .toList(),
+      );
+    } else {
+      // Mobile: Bottom Sheet
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.transparent,
+        builder: (context) => Container(
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E1E1E).withValues(alpha: 0.95),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            border: Border.all(color: Colors.white10),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: items
+                .map(
+                  (item) => ListTile(
+                    leading: Icon(
+                      item.icon,
+                      color: item.isDestructive
+                          ? Colors.redAccent
+                          : Colors.white70,
+                    ),
+                    title: Text(
+                      item.title,
+                      style: TextStyle(
+                        color: item.isDestructive
+                            ? Colors.redAccent
+                            : Colors.white,
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      item.onTap();
+                    },
+                  ),
+                )
+                .toList(),
+          ),
+        ),
+      );
+    }
+  }
+
+  // ADD: Priority Selection Sheet (Sub-menu)
+  void _showPrioritySheet(Task task) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E1E1E).withValues(alpha: 0.95),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(bottom: 16),
+              child: Text(
+                'Select Priority',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+            ),
+            _buildPriorityTile(task, 3, 'High', Colors.redAccent),
+            _buildPriorityTile(task, 2, 'Medium', Colors.orangeAccent),
+            _buildPriorityTile(task, 1, 'Low', Colors.blueAccent),
+            _buildPriorityTile(task, 0, 'None', Colors.grey),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPriorityTile(
+    Task task,
+    int priority,
+    String label,
+    Color color,
+  ) {
+    return ListTile(
+      leading: Icon(Icons.flag, color: color),
+      title: Text(label, style: const TextStyle(color: Colors.white)),
+      trailing: task.priority == priority
+          ? const Icon(Icons.check, color: Colors.white)
+          : null,
+      onTap: () {
+        Navigator.pop(context);
+        _setTaskPriority(task, priority);
+      },
+    );
+  }
+
   Future<void> _createList() async {
     final controller = TextEditingController();
     await showDialog(
@@ -246,29 +591,19 @@ class _HomePageState extends State<HomePage> {
       case 0: // All
         return _tasks;
       case 1: // Today
-        final now = DateTime.now();
-        final today = DateTime(now.year, now.month, now.day);
+        final now = _stripTime(DateTime.now());
         return _tasks.where((t) {
           if (t.dueDate == null) return false;
-          final tDate = DateTime(
-            t.dueDate!.year,
-            t.dueDate!.month,
-            t.dueDate!.day,
-          );
-          return tDate.isAtSameMomentAs(today);
+          final tDate = _stripTime(t.dueDate!);
+          return tDate.isAtSameMomentAs(now);
         }).toList();
       case 2: // Next 7 Days
-        final now = DateTime.now();
-        final today = DateTime(now.year, now.month, now.day);
-        final nextWeek = today.add(const Duration(days: 7));
+        final now = _stripTime(DateTime.now());
+        final nextWeek = now.add(const Duration(days: 7));
         return _tasks.where((t) {
           if (t.dueDate == null) return false;
-          final tDate = DateTime(
-            t.dueDate!.year,
-            t.dueDate!.month,
-            t.dueDate!.day,
-          );
-          return !tDate.isBefore(today) && tDate.isBefore(nextWeek);
+          final tDate = _stripTime(t.dueDate!);
+          return !tDate.isBefore(now) && tDate.isBefore(nextWeek);
         }).toList();
       case 3: // Inbox (No list assigned)
         return _tasks.where((t) => t.listId == null).toList();
@@ -299,6 +634,27 @@ class _HomePageState extends State<HomePage> {
           return _lists[listIndex].name;
         }
         return 'Lists';
+    }
+  }
+
+  // MODIFY: Helper to get dynamic placeholder text
+  String get _inputPlaceholder {
+    switch (_selectedIndex) {
+      case 0:
+        return '+ Add task to Inbox'; // All usually dumps to Inbox
+      case 1:
+        return '+ Add task to Today';
+      case 2:
+        return '+ Add task to Next 7 Days';
+      case 3:
+        return '+ Add task to Inbox';
+      default:
+        // List indices start at 4
+        final listIndex = _selectedIndex - 4;
+        if (listIndex >= 0 && listIndex < _lists.length) {
+          return '+ Add task to ${_lists[listIndex].name}';
+        }
+        return '+ Add a task';
     }
   }
 
@@ -358,18 +714,48 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // MODIFY: Refined filtering and grouping logic (TickTick Style)
   Widget _buildMainContent() {
     final tasksToShow = _filteredTasks;
+    
+    // Sort logic: Overdue -> Today -> Tomorrow -> Future -> No Date -> Completed
+    final now = _stripTime(DateTime.now());
+    final tomorrow = now.add(const Duration(days: 1));
+    final nextWeek = now.add(const Duration(days: 7));
 
-    // Filter tasks based on sections
-    final noDateTasks = tasksToShow
-        .where((t) => !t.isCompleted && t.dueDate == null)
-        .toList();
-    final completedTasks = tasksToShow.where((t) => t.isCompleted).toList();
-    // For now, put dated tasks in "No Date" or create separate section
-    final datedTasks = tasksToShow
-        .where((t) => !t.isCompleted && t.dueDate != null)
-        .toList();
+    final List<Task> overdue = [];
+    final List<Task> today = [];
+    final List<Task> tmrw = [];
+    final List<Task> next7Days = []; // Days after tomorrow, up to 7 days
+    final List<Task> later = [];
+    final List<Task> noDate = [];
+    final List<Task> completed = [];
+
+    for (var t in tasksToShow) {
+      if (t.isCompleted) {
+        completed.add(t);
+        continue;
+      }
+
+      if (t.dueDate == null) {
+        noDate.add(t);
+        continue;
+      }
+
+      final tDate = _stripTime(t.dueDate!);
+
+      if (tDate.isBefore(now)) {
+        overdue.add(t);
+      } else if (tDate.isAtSameMomentAs(now)) {
+        today.add(t);
+      } else if (tDate.isAtSameMomentAs(tomorrow)) {
+        tmrw.add(t);
+      } else if (tDate.isBefore(nextWeek)) {
+        next7Days.add(t);
+      } else {
+        later.add(t);
+      }
+    }
 
     return Padding(
       padding: const EdgeInsets.all(24.0),
@@ -410,9 +796,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                   IconButton(
                     icon: const Icon(Icons.sort, color: Colors.white),
-                    onPressed: () {
-                      _loadTasks();
-                    }, // Reload button for now
+                    onPressed: _loadTasks,
                   ),
                   IconButton(
                     icon: const Icon(Icons.more_horiz, color: Colors.white),
@@ -424,10 +808,7 @@ class _HomePageState extends State<HomePage> {
           ),
           const SizedBox(height: 24),
           
-          // Add Task Input (Only for All, Inbox, or Custom Lists - or maybe everywhere with varying logic?)
-          // For now, default to Inbox logic if 'All' or 'Inbox' is selected.
-          // If a specific list is selected, implementation details for adding to that list are needed.
-          // Let's assume adding task adds to current list if selected, or inbox otherwise.
+          // Input
           GlassCard(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: TextField(
@@ -435,22 +816,20 @@ class _HomePageState extends State<HomePage> {
               style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
                 border: InputBorder.none,
-                hintText:
-                    '+ Add task to "${_currentTitle == 'All' || _currentTitle == 'Next 7 Days' || _currentTitle == 'Today' ? 'Inbox' : _currentTitle}"',
+                hintText: _inputPlaceholder, // Dynamic Placeholder
                 hintStyle: TextStyle(
                   color: Colors.white.withValues(alpha: 0.4),
                 ),
               ),
               onSubmitted: (value) {
-                // Determine listId
                 String? targetListId;
+                // If in a custom list view, use that list ID
                 if (_selectedIndex >= 4) {
                   final listIndex = _selectedIndex - 4;
                   if (listIndex < _lists.length) {
                     targetListId = _lists[listIndex].id;
                   }
                 }
-                // Pass targetListId to _createTask (need to refactor _createTask to accept it)
                 _createTask(value, listId: targetListId);
               },
             ),
@@ -463,32 +842,75 @@ class _HomePageState extends State<HomePage> {
               onRefresh: _loadData,
               child: ListView(
                 children: [
-                  if (datedTasks.isNotEmpty) ...[
+                  if (overdue.isNotEmpty) ...[
                     TaskListGroup(
-                      title: "Planned",
-                      tasks: datedTasks,
+                      title: "Overdue",
+                      tasks: overdue,
                       onTaskToggle: _toggleTask,
-                      onTaskLongPress: _deleteTask,
+                      onTaskTap: (task) => _showEditTaskDialog(task),
+                      onTaskContextMenu: _showTaskContextMenu,
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
                   ],
-                  TaskListGroup(
-                    title: "No Date",
-                    tasks: noDateTasks,
-                    onTaskToggle: _toggleTask,
-                    onTaskLongPress: _deleteTask,
-                  ),
-                  const SizedBox(height: 24),
-                  if (completedTasks.isNotEmpty)
+                  if (today.isNotEmpty) ...[
+                    TaskListGroup(
+                      title: "Today",
+                      tasks: today,
+                      onTaskToggle: _toggleTask,
+                      onTaskTap: (task) => _showEditTaskDialog(task),
+                      onTaskContextMenu: _showTaskContextMenu,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  if (tmrw.isNotEmpty) ...[
+                    TaskListGroup(
+                      title: "Tomorrow",
+                      tasks: tmrw,
+                      onTaskToggle: _toggleTask,
+                      onTaskTap: (task) => _showEditTaskDialog(task),
+                      onTaskContextMenu: _showTaskContextMenu,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  if (next7Days.isNotEmpty) ...[
+                    TaskListGroup(
+                      title: "Next 7 Days",
+                      tasks: next7Days,
+                      onTaskToggle: _toggleTask,
+                      onTaskTap: (task) => _showEditTaskDialog(task),
+                      onTaskContextMenu: _showTaskContextMenu,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  if (later.isNotEmpty) ...[
+                    TaskListGroup(
+                      title: "Later",
+                      tasks: later,
+                      onTaskToggle: _toggleTask,
+                      onTaskTap: (task) => _showEditTaskDialog(task),
+                      onTaskContextMenu: _showTaskContextMenu,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  if (noDate.isNotEmpty) ...[
+                    TaskListGroup(
+                      title: "No Date",
+                      tasks: noDate,
+                      onTaskToggle: _toggleTask,
+                      onTaskTap: (task) => _showEditTaskDialog(task),
+                      onTaskContextMenu: _showTaskContextMenu,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  if (completed.isNotEmpty)
                     TaskListGroup(
                       title: "Completed",
-                      tasks: completedTasks,
+                      tasks: completed,
                       onTaskToggle: _toggleTask,
-                      onTaskTap: (task) {
-                        // Optional: Edit logic here
-                      },
-                      onTaskLongPress: _deleteTask,
+                      onTaskContextMenu: _showTaskContextMenu,
                     ),
+                  // Add bottom padding to avoid FAB overlap if added later
+                  const SizedBox(height: 80),
                 ],
               ),
             ),
@@ -497,4 +919,18 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
+}
+
+class _ContextMenuItem {
+  final String title;
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool isDestructive;
+
+  _ContextMenuItem(
+    this.title,
+    this.icon,
+    this.onTap, {
+    this.isDestructive = false,
+  });
 }

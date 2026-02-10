@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../models/task.dart';
@@ -7,21 +8,28 @@ class TaskItem extends StatelessWidget {
   final Task task;
   final Function(bool?) onToggle;
   final VoidCallback? onTap;
-  final VoidCallback? onLongPress;
+  final Function(TapUpDetails)? onContextMenu;
 
   const TaskItem({
     super.key,
     required this.task,
     required this.onToggle,
     this.onTap,
-    this.onLongPress,
+    this.onContextMenu,
   });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      onLongPress: onLongPress,
+      onSecondaryTapUp: (details) => onContextMenu?.call(details),
+      onLongPressStart: (details) => onContextMenu?.call(
+        TapUpDetails(
+          kind: PointerDeviceKind.touch,
+          globalPosition: details.globalPosition,
+          localPosition: details.localPosition,
+        ),
+      ),
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
