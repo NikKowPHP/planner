@@ -8,9 +8,8 @@ class GlassSidebar extends StatelessWidget {
   final Function(int) onItemSelected;
   final List<dynamic> userLists;
   final VoidCallback onAddList;
-  // NEW CODE START: Add tags
   final List<String> tags;
-  // NEW CODE END
+  final VoidCallback? onAddTag; // NEW
 
   const GlassSidebar({
     super.key,
@@ -18,9 +17,8 @@ class GlassSidebar extends StatelessWidget {
     required this.onItemSelected,
     required this.userLists,
     required this.onAddList,
-    // NEW CODE START
     this.tags = const [],
-    // NEW CODE END
+    this.onAddTag, // NEW
   });
 
   @override
@@ -138,8 +136,8 @@ class GlassSidebar extends StatelessWidget {
                       const SizedBox(height: 24),
                       _SectionHeader(
                         title: "Tags",
-                        onAdd: () {},
-                      ), // Placeholder add logic
+                        onAdd: onAddTag ?? () {},
+                      ), // Updated to use onAddTag
                       if (tags.isEmpty)
                         const Padding(
                           padding: EdgeInsets.all(8.0),
@@ -153,7 +151,7 @@ class GlassSidebar extends StatelessWidget {
                         ),
                     ]),
                   ),
-
+                  
                   // Tags Dynamic Items
                   SliverList(
                     delegate: SliverChildBuilderDelegate((context, index) {
@@ -179,7 +177,7 @@ class GlassSidebar extends StatelessWidget {
                         const Divider(color: Colors.white10),
                         _SidebarItem(
                           icon: Icons.check_circle_outline,
-                          label: 'Completed',
+                          label: 'Completed', 
                           isSelected:
                               selectedIndex ==
                               -1, // Special index for Completed
@@ -187,7 +185,7 @@ class GlassSidebar extends StatelessWidget {
                         ),
                         _SidebarItem(
                           icon: Icons.delete_outline,
-                          label: 'Trash',
+                          label: 'Trash', 
                           isSelected:
                               selectedIndex == -2, // Special index for Trash
                           onTap: () => onItemSelected(-2),

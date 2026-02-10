@@ -1,17 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../widgets/liquid_background.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/glass_navigation_bar.dart';
 import '../widgets/glass_sidebar.dart';
 import '../widgets/responsive_layout.dart';
-import '../providers/auth_provider.dart';
 import '../models/task.dart';
-import '../widgets/task_list_group.dart';
-import '../services/todo_service.dart';
 import '../models/task_list.dart';
+import '../models/tag.dart';
+import '../widgets/task_list_group.dart';
 import '../widgets/task_detail_panel.dart';
 import '../theme/glass_theme.dart';
+import '../services/todo_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -20,35 +19,25 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-
-
-// NEW CODE START: Enums
+// Enums
 enum GroupBy { date, priority, list, none }
 enum SortBy { date, priority, title }
-// NEW CODE END
 
 class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
   final TextEditingController _taskController = TextEditingController();
   final TodoService _todoService = TodoService();
   
-  // Cache for tasks and lists
   List<Task> _tasks = [];
   List<TaskList> _lists = [];
+  List<Tag> _tags = [];
   bool _isLoading = true;
   Task? _selectedTask;
 
-  // NEW CODE START: Mock Tags
-  final List<String> _tags = ['Urgent', 'Work', 'Personal'];
-  // NEW CODE END
-
-  // NEW CODE START: View State
   GroupBy _groupBy = GroupBy.date;
   SortBy _sortBy = SortBy.date;
   bool _hideCompleted = false;
-  // NEW CODE END
 
-  // ADD: Date utility to strip time
   DateTime _stripTime(DateTime date) =>
       DateTime(date.year, date.month, date.day);
 
@@ -63,11 +52,13 @@ class _HomePageState extends State<HomePage> {
       setState(() => _isLoading = true);
       final tasks = await _todoService.getTasks();
       final lists = await _todoService.getLists();
+      final tags = await _todoService.getTags();
       
       if (mounted) {
         setState(() {
           _tasks = tasks;
           _lists = lists;
+          _tags = tags;
           _isLoading = false;
         });
       }
@@ -80,25 +71,17 @@ class _HomePageState extends State<HomePage> {
       }
     }
   }
-  
 
-  // MODIFY: Update _createTask to handle dates based on current view
   Future<void> _createTask(String title, {String? listId}) async {
     if (title.trim().isEmpty) return;
     
-    // Determine default date based on selected view
     DateTime? defaultDate;
     if (_selectedIndex == 1) {
-      // Today View
       defaultDate = DateTime.now();
-    }
-    // "Next 7 Days" usually defaults to Today in TickTick, or user picks.
-    // We will default to Today for convenience.
-    else if (_selectedIndex == 2) {
+    } else if (_selectedIndex == 2) {
       defaultDate = DateTime.now();
     }
 
-    // 1. Optimistic Update: Create temp task
     final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
     final tempTask = Task(
       id: tempId,
@@ -107,7 +90,7 @@ class _HomePageState extends State<HomePage> {
       listId: listId,
       priority: 0,
       isCompleted: false,
-      dueDate: defaultDate, // Set the date
+      dueDate: defaultDate,
     );
 
     setState(() {
@@ -116,14 +99,12 @@ class _HomePageState extends State<HomePage> {
     });
 
     try {
-      // 2. Perform actual API call
       final newTask = await _todoService.createTask(
         title: title,
         listId: listId,
-        dueDate: defaultDate, // Pass date to service
+        dueDate: defaultDate,
       );
       
-      // 3. Replace temp task with real task
       setState(() {
         final index = _tasks.indexWhere((t) => t.id == tempId);
         if (index != -1) {
@@ -133,7 +114,6 @@ class _HomePageState extends State<HomePage> {
         }
       });
     } catch (e) {
-      // 4. Revert on error
       if (mounted) {
         setState(() {
           _tasks.removeWhere((t) => t.id == tempId);
@@ -145,7 +125,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // ADD: Method to reschedule/regroup tasks
   Future<void> _updateTaskDate(Task task, DateTime? newDate) async {
     final updatedTask = Task(
       id: task.id,
@@ -156,9 +135,10 @@ class _HomePageState extends State<HomePage> {
       isCompleted: task.isCompleted,
       priority: task.priority,
       dueDate: newDate,
+      tagIds: task.tagIds,
+      deletedAt: task.deletedAt,
     );
 
-    // Optimistic update
     final index = _tasks.indexWhere((t) => t.id == task.id);
     if (index == -1) return;
     final oldTask = _tasks[index];
@@ -181,7 +161,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // ADD: Date Picker Dialog
   Future<void> _showDatePicker(Task task) async {
     final now = DateTime.now();
     final pickedDate = await showDatePicker(
@@ -213,7 +192,6 @@ class _HomePageState extends State<HomePage> {
     final index = _tasks.indexWhere((t) => t.id == task.id);
     if (index == -1) return;
 
-    // 1. Optimistic Update
     final originalTask = _tasks[index];
     final updatedTask = Task(
       id: originalTask.id,
@@ -224,6 +202,8 @@ class _HomePageState extends State<HomePage> {
       priority: originalTask.priority,
       listId: originalTask.listId,
       isCompleted: value,
+      tagIds: originalTask.tagIds,
+      deletedAt: originalTask.deletedAt,
     );
 
     setState(() {
@@ -231,13 +211,10 @@ class _HomePageState extends State<HomePage> {
     });
 
     try {
-      // 2. API Call
       await _todoService.toggleTaskCompletion(task.id, value);
     } catch (e) {
-      // 3. Revert
       if (mounted) {
         setState(() {
-          // Find it again in case index changed
           final idx = _tasks.indexWhere((t) => t.id == task.id);
           if (idx != -1) _tasks[idx] = originalTask;
         });
@@ -252,20 +229,31 @@ class _HomePageState extends State<HomePage> {
     final index = _tasks.indexWhere((t) => t.id == task.id);
     if (index == -1) return;
 
-    // 1. Optimistic Update
-    final deletedTask = _tasks[index];
+    final originalTask = _tasks[index];
+    final softDeletedTask = Task(
+      id: originalTask.id,
+      userId: originalTask.userId,
+      title: originalTask.title,
+      description: originalTask.description,
+      dueDate: originalTask.dueDate,
+      isCompleted: originalTask.isCompleted,
+      priority: originalTask.priority,
+      listId: originalTask.listId,
+      tagIds: originalTask.tagIds,
+      deletedAt: DateTime.now(),
+    );
+
     setState(() {
-      _tasks.removeAt(index);
+      _tasks[index] = softDeletedTask;
     });
 
     try {
-      // 2. API Call
       await _todoService.deleteTask(task.id);
     } catch (e) {
-      // 3. Revert
       if (mounted) {
         setState(() {
-          _tasks.insert(index, deletedTask);
+          final idx = _tasks.indexWhere((t) => t.id == task.id);
+          if (idx != -1) _tasks[idx] = originalTask;
         });
         ScaffoldMessenger.of(
           context,
@@ -284,9 +272,10 @@ class _HomePageState extends State<HomePage> {
       dueDate: task.dueDate,
       isCompleted: task.isCompleted,
       priority: priority,
+      tagIds: task.tagIds,
+      deletedAt: task.deletedAt,
     );
 
-    // Optimistic update
     final index = _tasks.indexWhere((t) => t.id == task.id);
     if (index != -1) {
       final oldTask = _tasks[index];
@@ -336,7 +325,6 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _updateTaskGeneric(Task updatedTask) async {
-    // Optimistic Update
     final index = _tasks.indexWhere((t) => t.id == updatedTask.id);
     if (index == -1) return;
 
@@ -362,7 +350,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // ADD: Edit Task Dialog (Title/Description)
   Future<void> _showEditTaskDialog(Task task) async {
     final titleController = TextEditingController(text: task.title);
     final descController = TextEditingController(text: task.description);
@@ -417,10 +404,11 @@ class _HomePageState extends State<HomePage> {
                   dueDate: task.dueDate,
                   isCompleted: task.isCompleted,
                   priority: task.priority,
+                  tagIds: task.tagIds,
+                  deletedAt: task.deletedAt,
                 );
                 Navigator.pop(context);
 
-                // Optimistic Update
                 final index = _tasks.indexWhere((t) => t.id == task.id);
                 if (index != -1) {
                   final oldTask = _tasks[index];
@@ -440,12 +428,10 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // ADD: Context Menu Logic
   void _showTaskContextMenu(Task task, TapUpDetails details) {
     final isDesktop = ResponsiveLayout.isDesktop(context);
     final position = details.globalPosition;
 
-    // Menu Items Data
     final items = [
       _ContextMenuItem('Edit', Icons.edit, () => _showEditTaskDialog(task)),
       _ContextMenuItem(
@@ -463,7 +449,6 @@ class _HomePageState extends State<HomePage> {
     ];
 
     if (isDesktop) {
-      // Desktop: Popup Menu at cursor
       showMenu(
         context: context,
         position: RelativeRect.fromLTRB(
@@ -502,7 +487,6 @@ class _HomePageState extends State<HomePage> {
             .toList(),
       );
     } else {
-      // Mobile: Bottom Sheet
       showModalBottomSheet(
         context: context,
         backgroundColor: Colors.transparent,
@@ -545,7 +529,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // ADD: Priority Selection Sheet (Sub-menu)
   void _showPrioritySheet(Task task) {
     showModalBottomSheet(
       context: context,
@@ -596,6 +579,54 @@ class _HomePageState extends State<HomePage> {
         Navigator.pop(context);
         _setTaskPriority(task, priority);
       },
+    );
+  }
+
+  Future<void> _createTag() async {
+    final controller = TextEditingController();
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: const Text('New Tag', style: TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: controller,
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(
+            hintText: 'Tag Name',
+            hintStyle: TextStyle(color: Colors.white54),
+            enabledBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: Colors.white30),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              if (controller.text.trim().isNotEmpty) {
+                Navigator.pop(context);
+                try {
+                  final newTag = await _todoService.createTag(
+                    controller.text.trim(),
+                  );
+                  setState(() => _tags.add(newTag));
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                  }
+                }
+              }
+            },
+            child: const Text('Create'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -653,69 +684,74 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Filtering Logic
   List<Task> get _filteredTasks {
     List<Task> filtered;
-    
-    // 1. Basic Filter by View (Inbox, Today, List, Tag, etc.)
-    if (_selectedIndex == -1) {
-      filtered = _tasks.where((t) => t.isCompleted).toList();
-    } else if (_selectedIndex == -2) {
-      filtered = []; 
-    } else {
-      final activeTasks = _tasks; // Start with all
-      
-      switch (_selectedIndex) {
-        case 0: // All
-          filtered = activeTasks;
-          break;
-        case 1: // Today
-          final now = _stripTime(DateTime.now());
-          filtered = activeTasks.where((t) {
-            if (t.dueDate == null) return false;
-            final tDate = _stripTime(t.dueDate!);
-            return tDate.isAtSameMomentAs(now);
-          }).toList();
-          break;
-        case 2: // Next 7 Days
-          final now = _stripTime(DateTime.now());
-          final nextWeek = now.add(const Duration(days: 7));
-          filtered = activeTasks.where((t) {
-            if (t.dueDate == null) return false;
-            final tDate = _stripTime(t.dueDate!);
-            return !tDate.isBefore(now) && tDate.isBefore(nextWeek);
-          }).toList();
-          break;
-        case 3: // Inbox
-          filtered = activeTasks.where((t) => t.listId == null).toList();
-          break;
-        default:
-          final listCount = _lists.length;
-          if (_selectedIndex >= 4 && _selectedIndex < 4 + listCount) {
-             filtered = activeTasks.where((t) => t.listId == _lists[_selectedIndex - 4].id).toList();
-          } else if (_selectedIndex >= 4 + listCount) {
-             filtered = activeTasks; // Mock tags: return all for now
-          } else {
-             filtered = [];
-          }
-      }
+
+    if (_selectedIndex == -2) {
+      return _tasks.where((t) => t.deletedAt != null).toList();
     }
 
-    // 2. Apply "Hide Completed" Filter
-    // If not in "Completed" view (-1), and _hideCompleted is true, remove completed
-    if (_selectedIndex != -1 && _hideCompleted) {
+    final activeTasks = _tasks.where((t) => t.deletedAt == null).toList();
+
+    if (_selectedIndex == -1) {
+      return activeTasks.where((t) => t.isCompleted).toList();
+    }
+
+    switch (_selectedIndex) {
+      case 0:
+        filtered = activeTasks;
+        break;
+      case 1:
+        final now = _stripTime(DateTime.now());
+        filtered = activeTasks.where((t) {
+          if (t.dueDate == null) return false;
+          final tDate = _stripTime(t.dueDate!);
+          return tDate.isAtSameMomentAs(now);
+        }).toList();
+        break;
+      case 2:
+        final now = _stripTime(DateTime.now());
+        final nextWeek = now.add(const Duration(days: 7));
+        filtered = activeTasks.where((t) {
+          if (t.dueDate == null) return false;
+          final tDate = _stripTime(t.dueDate!);
+          return !tDate.isBefore(now) && tDate.isBefore(nextWeek);
+        }).toList();
+        break;
+      case 3:
+        filtered = activeTasks.where((t) => t.listId == null).toList();
+        break;
+      default:
+        final listCount = _lists.length;
+        if (_selectedIndex >= 4 && _selectedIndex < 4 + listCount) {
+          final listId = _lists[_selectedIndex - 4].id;
+          filtered = activeTasks.where((t) => t.listId == listId).toList();
+        } else if (_selectedIndex >= 4 + listCount) {
+          final tagIndex = _selectedIndex - (4 + listCount);
+          if (tagIndex >= 0 && tagIndex < _tags.length) {
+            final tagId = _tags[tagIndex].id;
+            filtered = activeTasks
+                .where((t) => t.tagIds.contains(tagId))
+                .toList();
+          } else {
+            filtered = [];
+          }
+        } else {
+          filtered = [];
+        }
+    }
+
+    if (_hideCompleted) {
       filtered = filtered.where((t) => !t.isCompleted).toList();
     }
-    
+
     return filtered;
   }
 
-  // NEW CODE START: Grouping Logic
   Map<String, List<Task>> _getGroupedTasks(List<Task> tasks) {
     Map<String, List<Task>> groups = {};
 
     if (_groupBy == GroupBy.date) {
-      // Existing Smart Date Logic
       final now = _stripTime(DateTime.now());
       final tomorrow = now.add(const Duration(days: 1));
       final nextWeek = now.add(const Duration(days: 7));
@@ -742,15 +778,21 @@ class _HomePageState extends State<HomePage> {
           (groups['Later'] ??= []).add(t);
         }
       }
-      
-      // Enforce specific order for Date view
-      final orderedKeys = ['Overdue', 'Today', 'Tomorrow', 'Next 7 Days', 'Later', 'No Date', 'Completed'];
+
+      final orderedKeys = [
+        'Overdue',
+        'Today',
+        'Tomorrow',
+        'Next 7 Days',
+        'Later',
+        'No Date',
+        'Completed',
+      ];
       final Map<String, List<Task>> orderedGroups = {};
       for (var key in orderedKeys) {
         if (groups.containsKey(key)) orderedGroups[key] = groups[key]!;
       }
       return orderedGroups;
-
     } else if (_groupBy == GroupBy.priority) {
       for (var t in tasks) {
         if (t.isCompleted && !_hideCompleted) {
@@ -760,14 +802,12 @@ class _HomePageState extends State<HomePage> {
         final key = _getPriorityLabel(t.priority);
         (groups[key] ??= []).add(t);
       }
-      // Order: High -> None
       final orderedKeys = ['High', 'Medium', 'Low', 'None', 'Completed'];
       final Map<String, List<Task>> orderedGroups = {};
       for (var key in orderedKeys) {
         if (groups.containsKey(key)) orderedGroups[key] = groups[key]!;
       }
       return orderedGroups;
-
     } else if (_groupBy == GroupBy.list) {
       for (var t in tasks) {
         if (t.isCompleted && !_hideCompleted) {
@@ -782,10 +822,8 @@ class _HomePageState extends State<HomePage> {
         }
         (groups[listName] ??= []).add(t);
       }
-      return groups; // Alphabetical order default by map insertion usually, or sort keys if needed
-
+      return groups;
     } else {
-      // None
       groups['Tasks'] = tasks;
       return groups;
     }
@@ -793,10 +831,14 @@ class _HomePageState extends State<HomePage> {
 
   String _getPriorityLabel(int priority) {
     switch (priority) {
-      case 3: return 'High';
-      case 2: return 'Medium';
-      case 1: return 'Low';
-      default: return 'None';
+      case 3:
+        return 'High';
+      case 2:
+        return 'Medium';
+      case 1:
+        return 'Low';
+      default:
+        return 'None';
     }
   }
 
@@ -806,7 +848,7 @@ class _HomePageState extends State<HomePage> {
         case SortBy.title:
           return a.title.compareTo(b.title);
         case SortBy.priority:
-          return b.priority.compareTo(a.priority); // Descending
+          return b.priority.compareTo(a.priority);
         case SortBy.date:
           if (a.dueDate == null && b.dueDate == null) return 0;
           if (a.dueDate == null) return 1;
@@ -815,39 +857,39 @@ class _HomePageState extends State<HomePage> {
       }
     });
   }
-  // NEW CODE END
 
   String get _currentTitle {
     if (_selectedIndex == -1) return 'Completed';
     if (_selectedIndex == -2) return 'Trash';
 
     switch (_selectedIndex) {
-      case 0: return 'All';
-      case 1: return 'Today';
-      case 2: return 'Next 7 Days';
-      case 3: return 'Inbox';
+      case 0:
+        return 'All';
+      case 1:
+        return 'Today';
+      case 2:
+        return 'Next 7 Days';
+      case 3:
+        return 'Inbox';
       default:
         final listCount = _lists.length;
-        
         if (_selectedIndex >= 4 && _selectedIndex < 4 + listCount) {
           return _lists[_selectedIndex - 4].name;
         }
-        
         if (_selectedIndex >= 4 + listCount) {
-           final tagIndex = _selectedIndex - (4 + listCount);
-           if (tagIndex >= 0 && tagIndex < _tags.length) {
-             return '# ${_tags[tagIndex]}';
-           }
+          final tagIndex = _selectedIndex - (4 + listCount);
+          if (tagIndex >= 0 && tagIndex < _tags.length) {
+            return '# ${_tags[tagIndex].name}';
+          }
         }
         return 'Glassy';
     }
   }
 
-  // MODIFY: Helper to get dynamic placeholder text
   String get _inputPlaceholder {
     switch (_selectedIndex) {
       case 0:
-        return '+ Add task to Inbox'; // All usually dumps to Inbox
+        return '+ Add task to Inbox';
       case 1:
         return '+ Add task to Today';
       case 2:
@@ -855,7 +897,6 @@ class _HomePageState extends State<HomePage> {
       case 3:
         return '+ Add task to Inbox';
       default:
-        // List indices start at 4
         final listIndex = _selectedIndex - 4;
         if (listIndex >= 0 && listIndex < _lists.length) {
           return '+ Add task to ${_lists[listIndex].name}';
@@ -866,37 +907,29 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    // ignore: unused_local_variable
-    final authProvider = Provider.of<AuthProvider>(context);
     final isDesktop = ResponsiveLayout.isDesktop(context);
 
     return Scaffold(
       extendBody: true,
       body: Stack(
         children: [
-          // Background
           const LiquidBackground(),
-
-          // Content
           if (isDesktop)
             Row(
               children: [
                 GlassSidebar(
                   selectedIndex: _selectedIndex,
                   userLists: _lists,
-                  // NEW CODE START
-                  tags: _tags,
-                  // NEW CODE END
+                  tags: _tags.map((t) => t.name).toList(),
                   onAddList: _createList,
+                  onAddTag: _createTag,
                   onItemSelected: (index) {
                     setState(() {
                       _selectedIndex = index;
                     });
                   },
                 ),
-                Expanded(
-                  child: _buildMainContent(),
-                ),
+                Expanded(child: _buildMainContent()),
                 if (_selectedTask != null) ...[
                   const VerticalDivider(width: 1, color: Colors.white10),
                   SizedBox(
@@ -920,9 +953,7 @@ class _HomePageState extends State<HomePage> {
               children: [
                 SafeArea(
                   bottom: false,
-                  child: ResponsiveLayout(
-                    child: _buildMainContent(),
-                  ),
+                  child: ResponsiveLayout(child: _buildMainContent()),
                 ),
                 GlassNavigationBar(
                   selectedIndex: _selectedIndex,
@@ -941,31 +972,31 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildMainContent() {
     final tasksToShow = _filteredTasks;
-    
-    // NEW CODE START: Process Groups
     final groupedTasks = _getGroupedTasks(tasksToShow);
     groupedTasks.forEach((key, list) => _sortList(list));
-    // NEW CODE END
 
     return Padding(
       padding: const EdgeInsets.all(24.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Title
               Row(
                 children: [
-                   const Icon(Icons.menu, color: Colors.white, size: 28),
-                   const SizedBox(width: 16),
-                   Text(_currentTitle, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                  const Icon(Icons.menu, color: Colors.white, size: 28),
+                  const SizedBox(width: 16),
+                  Text(
+                    _currentTitle,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ],
               ),
-              
-              // Actions
               Row(
                 children: [
                   if (_isLoading)
@@ -980,13 +1011,14 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                     ),
-                  
-                  // NEW CODE START: Sort/Group Menu
                   Theme(
                     data: Theme.of(context).copyWith(
                       cardColor: const Color(0xFF1E1E1E),
                       popupMenuTheme: PopupMenuThemeData(
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: Colors.white10)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: const BorderSide(color: Colors.white10),
+                        ),
                         textStyle: const TextStyle(color: Colors.white),
                       ),
                     ),
@@ -994,28 +1026,75 @@ class _HomePageState extends State<HomePage> {
                       icon: const Icon(Icons.swap_vert, color: Colors.white),
                       tooltip: 'Sort & Group',
                       itemBuilder: (context) => [
-                        // Grouping Header
-                        const PopupMenuItem(enabled: false, child: Text('GROUP BY', style: TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.bold))),
-                        _buildRadioItem('Date', _groupBy == GroupBy.date, () => setState(() => _groupBy = GroupBy.date)),
-                        _buildRadioItem('Priority', _groupBy == GroupBy.priority, () => setState(() => _groupBy = GroupBy.priority)),
-                        _buildRadioItem('List', _groupBy == GroupBy.list, () => setState(() => _groupBy = GroupBy.list)),
-                        _buildRadioItem('None', _groupBy == GroupBy.none, () => setState(() => _groupBy = GroupBy.none)),
+                        const PopupMenuItem(
+                          enabled: false,
+                          child: Text(
+                            'GROUP BY',
+                            style: TextStyle(
+                              color: Colors.white38,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        _buildRadioItem(
+                          'Date',
+                          _groupBy == GroupBy.date,
+                          () => setState(() => _groupBy = GroupBy.date),
+                        ),
+                        _buildRadioItem(
+                          'Priority',
+                          _groupBy == GroupBy.priority,
+                          () => setState(() => _groupBy = GroupBy.priority),
+                        ),
+                        _buildRadioItem(
+                          'List',
+                          _groupBy == GroupBy.list,
+                          () => setState(() => _groupBy = GroupBy.list),
+                        ),
+                        _buildRadioItem(
+                          'None',
+                          _groupBy == GroupBy.none,
+                          () => setState(() => _groupBy = GroupBy.none),
+                        ),
                         const PopupMenuDivider(),
-                        // Sorting Header
-                        const PopupMenuItem(enabled: false, child: Text('SORT BY', style: TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.bold))),
-                        _buildRadioItem('Date', _sortBy == SortBy.date, () => setState(() => _sortBy = SortBy.date)),
-                        _buildRadioItem('Priority', _sortBy == SortBy.priority, () => setState(() => _sortBy = SortBy.priority)),
-                        _buildRadioItem('Title', _sortBy == SortBy.title, () => setState(() => _sortBy = SortBy.title)),
+                        const PopupMenuItem(
+                          enabled: false,
+                          child: Text(
+                            'SORT BY',
+                            style: TextStyle(
+                              color: Colors.white38,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        _buildRadioItem(
+                          'Date',
+                          _sortBy == SortBy.date,
+                          () => setState(() => _sortBy = SortBy.date),
+                        ),
+                        _buildRadioItem(
+                          'Priority',
+                          _sortBy == SortBy.priority,
+                          () => setState(() => _sortBy = SortBy.priority),
+                        ),
+                        _buildRadioItem(
+                          'Title',
+                          _sortBy == SortBy.title,
+                          () => setState(() => _sortBy = SortBy.title),
+                        ),
                       ],
                     ),
                   ),
-
-                  // NEW CODE START: View Options Menu
                   Theme(
                     data: Theme.of(context).copyWith(
                       cardColor: const Color(0xFF1E1E1E),
                       popupMenuTheme: PopupMenuThemeData(
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: Colors.white10)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: const BorderSide(color: Colors.white10),
+                        ),
                         textStyle: const TextStyle(color: Colors.white),
                       ),
                     ),
@@ -1023,15 +1102,20 @@ class _HomePageState extends State<HomePage> {
                       icon: const Icon(Icons.more_horiz, color: Colors.white),
                       tooltip: 'View Options',
                       itemBuilder: (context) => [
-                        // View Toggles (Visual only for now)
                         PopupMenuItem(
                           enabled: false,
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                             children: [
                               Icon(Icons.list, color: GlassTheme.accentColor),
-                              const Icon(Icons.view_column_outlined, color: Colors.white38),
-                              const Icon(Icons.calendar_view_month, color: Colors.white38),
+                              const Icon(
+                                Icons.view_column_outlined,
+                                color: Colors.white38,
+                              ),
+                              const Icon(
+                                Icons.calendar_view_month,
+                                color: Colors.white38,
+                              ),
                             ],
                           ),
                         ),
@@ -1040,57 +1124,61 @@ class _HomePageState extends State<HomePage> {
                           checked: _hideCompleted,
                           value: 'hide',
                           child: const Text('Hide Completed'),
-                          onTap: () => setState(() => _hideCompleted = !_hideCompleted),
+                          onTap: () =>
+                              setState(() => _hideCompleted = !_hideCompleted),
                         ),
                         const CheckedPopupMenuItem(
-                          checked: true, // Mock logic
+                          checked: true,
                           value: 'details',
                           child: Text('Show Details'),
                         ),
                         const PopupMenuDivider(),
                         const PopupMenuItem(
                           child: Row(
-                             children: [Icon(Icons.print, size: 18, color: Colors.white70), SizedBox(width: 12), Text('Print')],
+                            children: [
+                              Icon(
+                                Icons.print,
+                                size: 18,
+                                color: Colors.white70,
+                              ),
+                              SizedBox(width: 12),
+                              Text('Print'),
+                            ],
                           ),
                         ),
                       ],
                     ),
                   ),
-                  // NEW CODE END
                 ],
               ),
             ],
           ),
-          
           const SizedBox(height: 24),
-          // Input Field (Existing)
           GlassCard(
-             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-             child: TextField(
-               controller: _taskController,
-               style: const TextStyle(color: Colors.white),
-               decoration: InputDecoration(
-                 border: InputBorder.none,
-                 hintText: _inputPlaceholder,
-                 hintStyle: TextStyle(
-                   color: Colors.white.withValues(alpha: 0.4),
-                 ),
-               ),
-               onSubmitted: (value) {
-                 String? targetListId;
-                 if (_selectedIndex >= 4) {
-                   final listIndex = _selectedIndex - 4;
-                   if (listIndex < _lists.length) {
-                     targetListId = _lists[listIndex].id;
-                   }
-                 }
-                 _createTask(value, listId: targetListId);
-               },
-             ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: TextField(
+              controller: _taskController,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                hintText: _inputPlaceholder,
+                hintStyle: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.4),
+                ),
+              ),
+              onSubmitted: (value) {
+                String? targetListId;
+                if (_selectedIndex >= 4) {
+                  final listIndex = _selectedIndex - 4;
+                  if (listIndex < _lists.length) {
+                    targetListId = _lists[listIndex].id;
+                  }
+                }
+                _createTask(value, listId: targetListId);
+              },
+            ),
           ),
           const SizedBox(height: 24),
-
-          // NEW CODE START: Dynamic List Building
           Expanded(
             child: RefreshIndicator(
               onRefresh: _loadData,
@@ -1100,7 +1188,7 @@ class _HomePageState extends State<HomePage> {
                 itemBuilder: (context, index) {
                   final groupName = groupedTasks.keys.elementAt(index);
                   final tasks = groupedTasks[groupName]!;
-                  
+
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 16),
                     child: TaskListGroup(
@@ -1115,14 +1203,16 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ),
-          // NEW CODE END
         ],
       ),
     );
   }
 
-  // Helper for menu items
-  PopupMenuItem _buildRadioItem(String text, bool selected, VoidCallback onTap) {
+  PopupMenuItem _buildRadioItem(
+    String text,
+    bool selected,
+    VoidCallback onTap,
+  ) {
     return PopupMenuItem(
       onTap: onTap,
       height: 40,
@@ -1134,7 +1224,10 @@ class _HomePageState extends State<HomePage> {
             size: 18,
           ),
           const SizedBox(width: 12),
-          Text(text, style: TextStyle(color: selected ? Colors.white : Colors.white70)),
+          Text(
+            text,
+            style: TextStyle(color: selected ? Colors.white : Colors.white70),
+          ),
         ],
       ),
     );

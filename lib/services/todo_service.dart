@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/supabase_config.dart';
 import '../models/task.dart';
 import '../models/task_list.dart';
+import '../models/tag.dart';
 import '../services/logger.dart';
 
 class TodoService {
@@ -75,13 +76,15 @@ class TodoService {
       await _logger.log(
         'Fetching tasks for user: ${_supabase.auth.currentUser?.id}, listId: $listId',
       );
-      var query = _supabase.from('tasks').select();
+      var query = _supabase.from('tasks').select('*, task_tags(tag_id)');
       
       if (listId != null) {
         query = query.eq('list_id', listId);
       }
       
-      // Order by is_completed (false first), then priority (desc), then created_at
+      // Note: We fetch ALL tasks (including deleted) so the Trash view works.
+      // Filtering happens on the client side in HomePage.
+      
       final response = await query
           .order('is_completed', ascending: true)
           .order('priority', ascending: false)
@@ -156,6 +159,7 @@ class TodoService {
             'priority': task.priority,
             'due_date': task.dueDate?.toIso8601String(),
             'list_id': task.listId,
+            'deleted_at': task.deletedAt?.toIso8601String(),
           })
           .eq('id', task.id)
           .select()
@@ -185,14 +189,60 @@ class TodoService {
     }
   }
 
-  // Delete a task
+  // MODIFY: Change to Soft Delete
   Future<void> deleteTask(String taskId) async {
     try {
-      await _logger.log('Deleting task: $taskId');
-      await _supabase.from('tasks').delete().eq('id', taskId);
-      await _logger.log('Deleted task: $taskId');
+      await _logger.log('Soft deleting task: $taskId');
+      await _supabase
+          .from('tasks')
+          .update({'deleted_at': DateTime.now().toIso8601String()})
+          .eq('id', taskId);
     } catch (e, stack) {
       await _logger.error('Error deleting task: $taskId', e, stack);
+      rethrow;
+    }
+  }
+
+  // ADD: Restore Task
+  Future<void> restoreTask(String taskId) async {
+    try {
+      await _logger.log('Restoring task: $taskId');
+      await _supabase
+          .from('tasks')
+          .update({'deleted_at': null})
+          .eq('id', taskId);
+    } catch (e, stack) {
+      await _logger.error('Error restoring task: $taskId', e, stack);
+      rethrow;
+    }
+  }
+
+  // ADD: Get Tags
+  Future<List<Tag>> getTags() async {
+    try {
+      await _logger.log('Fetching tags...');
+      final response = await _supabase.from('tags').select().order('name');
+      return (response as List).map((e) => Tag.fromJson(e)).toList();
+    } catch (e, stack) {
+      await _logger.error('Error fetching tags', e, stack);
+      rethrow;
+    }
+  }
+
+  // ADD: Create Tag
+  Future<Tag> createTag(String name) async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) throw Exception('User not logged in');
+
+      final response = await _supabase
+          .from('tags')
+          .insert({'user_id': user.id, 'name': name})
+          .select()
+          .single();
+      return Tag.fromJson(response);
+    } catch (e, stack) {
+      await _logger.error('Error creating tag: $name', e, stack);
       rethrow;
     }
   }
