@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:provider/provider.dart';
 import '../widgets/liquid_background.dart';
 import '../widgets/glass_card.dart';
 import '../widgets/glass_navigation_bar.dart';
+import '../providers/auth_provider.dart';
 import 'details_page.dart';
 
 class HomePage extends StatefulWidget {
@@ -17,8 +19,31 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final authProvider = Provider.of<AuthProvider>(context);
+    final userEmail = authProvider.currentUser?.email ?? 'User';
+
     return Scaffold(
-      extendBody: true, // Important for glass effect over body
+      extendBody: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: Text(
+          userEmail,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout, color: Colors.white),
+            onPressed: () async {
+              await authProvider.signOut();
+            },
+            tooltip: 'Logout',
+          ),
+        ],
+      ),
       body: Stack(
         children: [
           // Background
@@ -55,6 +80,9 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildHeader() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final userName = authProvider.currentUser?.email?.split('@')[0] ?? 'User';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -67,7 +95,7 @@ class _HomePageState extends State<HomePage> {
         ).animate().fadeIn(duration: 600.ms).slideX(begin: -0.2, end: 0),
         
         Text(
-          "Alex",
+          userName,
           style: TextStyle(
             color: Colors.white,
             fontSize: 32,
