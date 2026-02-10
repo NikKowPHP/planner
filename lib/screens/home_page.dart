@@ -11,6 +11,7 @@ import '../widgets/task_list_group.dart';
 import '../services/todo_service.dart';
 import '../models/task_list.dart';
 import '../widgets/task_detail_panel.dart';
+import '../theme/glass_theme.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -20,6 +21,11 @@ class HomePage extends StatefulWidget {
 }
 
 
+
+// NEW CODE START: Enums
+enum GroupBy { date, priority, list, none }
+enum SortBy { date, priority, title }
+// NEW CODE END
 
 class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
@@ -31,6 +37,16 @@ class _HomePageState extends State<HomePage> {
   List<TaskList> _lists = [];
   bool _isLoading = true;
   Task? _selectedTask;
+
+  // NEW CODE START: Mock Tags
+  final List<String> _tags = ['Urgent', 'Work', 'Personal'];
+  // NEW CODE END
+
+  // NEW CODE START: View State
+  GroupBy _groupBy = GroupBy.date;
+  SortBy _sortBy = SortBy.date;
+  bool _hideCompleted = false;
+  // NEW CODE END
 
   // ADD: Date utility to strip time
   DateTime _stripTime(DateTime date) =>
@@ -65,19 +81,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
   
-  // Helper to load only tasks (for refresh)
-  Future<void> _loadTasks() async {
-    try {
-      final tasks = await _todoService.getTasks();
-      if (mounted) {
-        setState(() {
-          _tasks = tasks;
-        });
-      }
-    } catch (e) {
-      // Handle silently or show snackbar
-    }
-  }
 
   // MODIFY: Update _createTask to handle dates based on current view
   Future<void> _createTask(String title, {String? listId}) async {
@@ -652,53 +655,191 @@ class _HomePageState extends State<HomePage> {
 
   // Filtering Logic
   List<Task> get _filteredTasks {
-    switch (_selectedIndex) {
-      case 0: // All
-        return _tasks;
-      case 1: // Today
-        final now = _stripTime(DateTime.now());
-        return _tasks.where((t) {
-          if (t.dueDate == null) return false;
-          final tDate = _stripTime(t.dueDate!);
-          return tDate.isAtSameMomentAs(now);
-        }).toList();
-      case 2: // Next 7 Days
-        final now = _stripTime(DateTime.now());
-        final nextWeek = now.add(const Duration(days: 7));
-        return _tasks.where((t) {
-          if (t.dueDate == null) return false;
-          final tDate = _stripTime(t.dueDate!);
-          return !tDate.isBefore(now) && tDate.isBefore(nextWeek);
-        }).toList();
-      case 3: // Inbox (No list assigned)
-        return _tasks.where((t) => t.listId == null).toList();
-      default:
-        // Lists
-        // Index 4 onwards corresponds to _lists[index - 4]
-        final listIndex = _selectedIndex - 4;
-        if (listIndex >= 0 && listIndex < _lists.length) {
-          return _tasks.where((t) => t.listId == _lists[listIndex].id).toList();
+    List<Task> filtered;
+    
+    // 1. Basic Filter by View (Inbox, Today, List, Tag, etc.)
+    if (_selectedIndex == -1) {
+      filtered = _tasks.where((t) => t.isCompleted).toList();
+    } else if (_selectedIndex == -2) {
+      filtered = []; 
+    } else {
+      final activeTasks = _tasks; // Start with all
+      
+      switch (_selectedIndex) {
+        case 0: // All
+          filtered = activeTasks;
+          break;
+        case 1: // Today
+          final now = _stripTime(DateTime.now());
+          filtered = activeTasks.where((t) {
+            if (t.dueDate == null) return false;
+            final tDate = _stripTime(t.dueDate!);
+            return tDate.isAtSameMomentAs(now);
+          }).toList();
+          break;
+        case 2: // Next 7 Days
+          final now = _stripTime(DateTime.now());
+          final nextWeek = now.add(const Duration(days: 7));
+          filtered = activeTasks.where((t) {
+            if (t.dueDate == null) return false;
+            final tDate = _stripTime(t.dueDate!);
+            return !tDate.isBefore(now) && tDate.isBefore(nextWeek);
+          }).toList();
+          break;
+        case 3: // Inbox
+          filtered = activeTasks.where((t) => t.listId == null).toList();
+          break;
+        default:
+          final listCount = _lists.length;
+          if (_selectedIndex >= 4 && _selectedIndex < 4 + listCount) {
+             filtered = activeTasks.where((t) => t.listId == _lists[_selectedIndex - 4].id).toList();
+          } else if (_selectedIndex >= 4 + listCount) {
+             filtered = activeTasks; // Mock tags: return all for now
+          } else {
+             filtered = [];
+          }
+      }
+    }
+
+    // 2. Apply "Hide Completed" Filter
+    // If not in "Completed" view (-1), and _hideCompleted is true, remove completed
+    if (_selectedIndex != -1 && _hideCompleted) {
+      filtered = filtered.where((t) => !t.isCompleted).toList();
+    }
+    
+    return filtered;
+  }
+
+  // NEW CODE START: Grouping Logic
+  Map<String, List<Task>> _getGroupedTasks(List<Task> tasks) {
+    Map<String, List<Task>> groups = {};
+
+    if (_groupBy == GroupBy.date) {
+      // Existing Smart Date Logic
+      final now = _stripTime(DateTime.now());
+      final tomorrow = now.add(const Duration(days: 1));
+      final nextWeek = now.add(const Duration(days: 7));
+
+      for (var t in tasks) {
+        if (t.isCompleted && !_hideCompleted) {
+          (groups['Completed'] ??= []).add(t);
+          continue;
         }
-        return [];
+        if (t.dueDate == null) {
+          (groups['No Date'] ??= []).add(t);
+          continue;
+        }
+        final tDate = _stripTime(t.dueDate!);
+        if (tDate.isBefore(now)) {
+          (groups['Overdue'] ??= []).add(t);
+        } else if (tDate.isAtSameMomentAs(now)) {
+          (groups['Today'] ??= []).add(t);
+        } else if (tDate.isAtSameMomentAs(tomorrow)) {
+          (groups['Tomorrow'] ??= []).add(t);
+        } else if (tDate.isBefore(nextWeek)) {
+          (groups['Next 7 Days'] ??= []).add(t);
+        } else {
+          (groups['Later'] ??= []).add(t);
+        }
+      }
+      
+      // Enforce specific order for Date view
+      final orderedKeys = ['Overdue', 'Today', 'Tomorrow', 'Next 7 Days', 'Later', 'No Date', 'Completed'];
+      final Map<String, List<Task>> orderedGroups = {};
+      for (var key in orderedKeys) {
+        if (groups.containsKey(key)) orderedGroups[key] = groups[key]!;
+      }
+      return orderedGroups;
+
+    } else if (_groupBy == GroupBy.priority) {
+      for (var t in tasks) {
+        if (t.isCompleted && !_hideCompleted) {
+          (groups['Completed'] ??= []).add(t);
+          continue;
+        }
+        final key = _getPriorityLabel(t.priority);
+        (groups[key] ??= []).add(t);
+      }
+      // Order: High -> None
+      final orderedKeys = ['High', 'Medium', 'Low', 'None', 'Completed'];
+      final Map<String, List<Task>> orderedGroups = {};
+      for (var key in orderedKeys) {
+        if (groups.containsKey(key)) orderedGroups[key] = groups[key]!;
+      }
+      return orderedGroups;
+
+    } else if (_groupBy == GroupBy.list) {
+      for (var t in tasks) {
+        if (t.isCompleted && !_hideCompleted) {
+          (groups['Completed'] ??= []).add(t);
+          continue;
+        }
+        String listName = 'Inbox';
+        if (t.listId != null) {
+          try {
+            listName = _lists.firstWhere((l) => l.id == t.listId).name;
+          } catch (_) {}
+        }
+        (groups[listName] ??= []).add(t);
+      }
+      return groups; // Alphabetical order default by map insertion usually, or sort keys if needed
+
+    } else {
+      // None
+      groups['Tasks'] = tasks;
+      return groups;
     }
   }
 
+  String _getPriorityLabel(int priority) {
+    switch (priority) {
+      case 3: return 'High';
+      case 2: return 'Medium';
+      case 1: return 'Low';
+      default: return 'None';
+    }
+  }
+
+  void _sortList(List<Task> list) {
+    list.sort((a, b) {
+      switch (_sortBy) {
+        case SortBy.title:
+          return a.title.compareTo(b.title);
+        case SortBy.priority:
+          return b.priority.compareTo(a.priority); // Descending
+        case SortBy.date:
+          if (a.dueDate == null && b.dueDate == null) return 0;
+          if (a.dueDate == null) return 1;
+          if (b.dueDate == null) return -1;
+          return a.dueDate!.compareTo(b.dueDate!);
+      }
+    });
+  }
+  // NEW CODE END
+
   String get _currentTitle {
+    if (_selectedIndex == -1) return 'Completed';
+    if (_selectedIndex == -2) return 'Trash';
+
     switch (_selectedIndex) {
-      case 0:
-        return 'All';
-      case 1:
-        return 'Today';
-      case 2:
-        return 'Next 7 Days';
-      case 3:
-        return 'Inbox';
+      case 0: return 'All';
+      case 1: return 'Today';
+      case 2: return 'Next 7 Days';
+      case 3: return 'Inbox';
       default:
-        final listIndex = _selectedIndex - 4;
-        if (listIndex >= 0 && listIndex < _lists.length) {
-          return _lists[listIndex].name;
+        final listCount = _lists.length;
+        
+        if (_selectedIndex >= 4 && _selectedIndex < 4 + listCount) {
+          return _lists[_selectedIndex - 4].name;
         }
-        return 'Lists';
+        
+        if (_selectedIndex >= 4 + listCount) {
+           final tagIndex = _selectedIndex - (4 + listCount);
+           if (tagIndex >= 0 && tagIndex < _tags.length) {
+             return '# ${_tags[tagIndex]}';
+           }
+        }
+        return 'Glassy';
     }
   }
 
@@ -743,6 +884,9 @@ class _HomePageState extends State<HomePage> {
                 GlassSidebar(
                   selectedIndex: _selectedIndex,
                   userLists: _lists,
+                  // NEW CODE START
+                  tags: _tags,
+                  // NEW CODE END
                   onAddList: _createList,
                   onItemSelected: (index) {
                     setState(() {
@@ -795,48 +939,13 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // MODIFY: Refined filtering and grouping logic (TickTick Style)
   Widget _buildMainContent() {
     final tasksToShow = _filteredTasks;
     
-    // Sort logic: Overdue -> Today -> Tomorrow -> Future -> No Date -> Completed
-    final now = _stripTime(DateTime.now());
-    final tomorrow = now.add(const Duration(days: 1));
-    final nextWeek = now.add(const Duration(days: 7));
-
-    final List<Task> overdue = [];
-    final List<Task> today = [];
-    final List<Task> tmrw = [];
-    final List<Task> next7Days = []; // Days after tomorrow, up to 7 days
-    final List<Task> later = [];
-    final List<Task> noDate = [];
-    final List<Task> completed = [];
-
-    for (var t in tasksToShow) {
-      if (t.isCompleted) {
-        completed.add(t);
-        continue;
-      }
-
-      if (t.dueDate == null) {
-        noDate.add(t);
-        continue;
-      }
-
-      final tDate = _stripTime(t.dueDate!);
-
-      if (tDate.isBefore(now)) {
-        overdue.add(t);
-      } else if (tDate.isAtSameMomentAs(now)) {
-        today.add(t);
-      } else if (tDate.isAtSameMomentAs(tomorrow)) {
-        tmrw.add(t);
-      } else if (tDate.isBefore(nextWeek)) {
-        next7Days.add(t);
-      } else {
-        later.add(t);
-      }
-    }
+    // NEW CODE START: Process Groups
+    final groupedTasks = _getGroupedTasks(tasksToShow);
+    groupedTasks.forEach((key, list) => _sortList(list));
+    // NEW CODE END
 
     return Padding(
       padding: const EdgeInsets.all(24.0),
@@ -847,20 +956,16 @@ class _HomePageState extends State<HomePage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              // Title
               Row(
                 children: [
-                  const Icon(Icons.menu, color: Colors.white, size: 28),
-                  const SizedBox(width: 16),
-                  Text(
-                    _currentTitle,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                   const Icon(Icons.menu, color: Colors.white, size: 28),
+                   const SizedBox(width: 16),
+                   Text(_currentTitle, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
                 ],
               ),
+              
+              // Actions
               Row(
                 children: [
                   if (_isLoading)
@@ -875,127 +980,161 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                     ),
-                  IconButton(
-                    icon: const Icon(Icons.sort, color: Colors.white),
-                    onPressed: _loadTasks,
+                  
+                  // NEW CODE START: Sort/Group Menu
+                  Theme(
+                    data: Theme.of(context).copyWith(
+                      cardColor: const Color(0xFF1E1E1E),
+                      popupMenuTheme: PopupMenuThemeData(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: Colors.white10)),
+                        textStyle: const TextStyle(color: Colors.white),
+                      ),
+                    ),
+                    child: PopupMenuButton<dynamic>(
+                      icon: const Icon(Icons.swap_vert, color: Colors.white),
+                      tooltip: 'Sort & Group',
+                      itemBuilder: (context) => [
+                        // Grouping Header
+                        const PopupMenuItem(enabled: false, child: Text('GROUP BY', style: TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.bold))),
+                        _buildRadioItem('Date', _groupBy == GroupBy.date, () => setState(() => _groupBy = GroupBy.date)),
+                        _buildRadioItem('Priority', _groupBy == GroupBy.priority, () => setState(() => _groupBy = GroupBy.priority)),
+                        _buildRadioItem('List', _groupBy == GroupBy.list, () => setState(() => _groupBy = GroupBy.list)),
+                        _buildRadioItem('None', _groupBy == GroupBy.none, () => setState(() => _groupBy = GroupBy.none)),
+                        const PopupMenuDivider(),
+                        // Sorting Header
+                        const PopupMenuItem(enabled: false, child: Text('SORT BY', style: TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.bold))),
+                        _buildRadioItem('Date', _sortBy == SortBy.date, () => setState(() => _sortBy = SortBy.date)),
+                        _buildRadioItem('Priority', _sortBy == SortBy.priority, () => setState(() => _sortBy = SortBy.priority)),
+                        _buildRadioItem('Title', _sortBy == SortBy.title, () => setState(() => _sortBy = SortBy.title)),
+                      ],
+                    ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.more_horiz, color: Colors.white),
-                    onPressed: () {},
+
+                  // NEW CODE START: View Options Menu
+                  Theme(
+                    data: Theme.of(context).copyWith(
+                      cardColor: const Color(0xFF1E1E1E),
+                      popupMenuTheme: PopupMenuThemeData(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: Colors.white10)),
+                        textStyle: const TextStyle(color: Colors.white),
+                      ),
+                    ),
+                    child: PopupMenuButton<dynamic>(
+                      icon: const Icon(Icons.more_horiz, color: Colors.white),
+                      tooltip: 'View Options',
+                      itemBuilder: (context) => [
+                        // View Toggles (Visual only for now)
+                        PopupMenuItem(
+                          enabled: false,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              Icon(Icons.list, color: GlassTheme.accentColor),
+                              const Icon(Icons.view_column_outlined, color: Colors.white38),
+                              const Icon(Icons.calendar_view_month, color: Colors.white38),
+                            ],
+                          ),
+                        ),
+                        const PopupMenuDivider(),
+                        CheckedPopupMenuItem(
+                          checked: _hideCompleted,
+                          value: 'hide',
+                          child: const Text('Hide Completed'),
+                          onTap: () => setState(() => _hideCompleted = !_hideCompleted),
+                        ),
+                        const CheckedPopupMenuItem(
+                          checked: true, // Mock logic
+                          value: 'details',
+                          child: Text('Show Details'),
+                        ),
+                        const PopupMenuDivider(),
+                        const PopupMenuItem(
+                          child: Row(
+                             children: [Icon(Icons.print, size: 18, color: Colors.white70), SizedBox(width: 12), Text('Print')],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+                  // NEW CODE END
                 ],
               ),
             ],
           ),
-          const SizedBox(height: 24),
           
-          // Input
+          const SizedBox(height: 24),
+          // Input Field (Existing)
           GlassCard(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: TextField(
-              controller: _taskController,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                border: InputBorder.none,
-                hintText: _inputPlaceholder, // Dynamic Placeholder
-                hintStyle: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.4),
-                ),
-              ),
-              onSubmitted: (value) {
-                String? targetListId;
-                // If in a custom list view, use that list ID
-                if (_selectedIndex >= 4) {
-                  final listIndex = _selectedIndex - 4;
-                  if (listIndex < _lists.length) {
-                    targetListId = _lists[listIndex].id;
-                  }
-                }
-                _createTask(value, listId: targetListId);
-              },
-            ),
+             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+             child: TextField(
+               controller: _taskController,
+               style: const TextStyle(color: Colors.white),
+               decoration: InputDecoration(
+                 border: InputBorder.none,
+                 hintText: _inputPlaceholder,
+                 hintStyle: TextStyle(
+                   color: Colors.white.withValues(alpha: 0.4),
+                 ),
+               ),
+               onSubmitted: (value) {
+                 String? targetListId;
+                 if (_selectedIndex >= 4) {
+                   final listIndex = _selectedIndex - 4;
+                   if (listIndex < _lists.length) {
+                     targetListId = _lists[listIndex].id;
+                   }
+                 }
+                 _createTask(value, listId: targetListId);
+               },
+             ),
           ),
           const SizedBox(height: 24),
 
-          // Task Lists
+          // NEW CODE START: Dynamic List Building
           Expanded(
             child: RefreshIndicator(
               onRefresh: _loadData,
-              child: ListView(
-                children: [
-                  if (overdue.isNotEmpty) ...[
-                    TaskListGroup(
-                      title: "Overdue",
-                      tasks: overdue,
+              child: ListView.builder(
+                padding: const EdgeInsets.only(bottom: 80),
+                itemCount: groupedTasks.length,
+                itemBuilder: (context, index) {
+                  final groupName = groupedTasks.keys.elementAt(index);
+                  final tasks = groupedTasks[groupName]!;
+                  
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: TaskListGroup(
+                      title: groupName,
+                      tasks: tasks,
                       onTaskToggle: _toggleTask,
                       onTaskTap: _selectTask,
                       onTaskContextMenu: _showTaskContextMenu,
                     ),
-                    const SizedBox(height: 16),
-                  ],
-                  if (today.isNotEmpty) ...[
-                    TaskListGroup(
-                      title: "Today",
-                      tasks: today,
-                      onTaskToggle: _toggleTask,
-                      onTaskTap: _selectTask,
-                      onTaskContextMenu: _showTaskContextMenu,
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  if (tmrw.isNotEmpty) ...[
-                    TaskListGroup(
-                      title: "Tomorrow",
-                      tasks: tmrw,
-                      onTaskToggle: _toggleTask,
-                      onTaskTap: _selectTask,
-                      onTaskContextMenu: _showTaskContextMenu,
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  if (next7Days.isNotEmpty) ...[
-                    TaskListGroup(
-                      title: "Next 7 Days",
-                      tasks: next7Days,
-                      onTaskToggle: _toggleTask,
-                      onTaskTap: _selectTask,
-                      onTaskContextMenu: _showTaskContextMenu,
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  if (later.isNotEmpty) ...[
-                    TaskListGroup(
-                      title: "Later",
-                      tasks: later,
-                      onTaskToggle: _toggleTask,
-                      onTaskTap: _selectTask,
-                      onTaskContextMenu: _showTaskContextMenu,
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  if (noDate.isNotEmpty) ...[
-                    TaskListGroup(
-                      title: "No Date",
-                      tasks: noDate,
-                      onTaskToggle: _toggleTask,
-                      onTaskTap: _selectTask,
-                      onTaskContextMenu: _showTaskContextMenu,
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  if (completed.isNotEmpty)
-                    TaskListGroup(
-                      title: "Completed",
-                      tasks: completed,
-                      onTaskToggle: _toggleTask,
-                      onTaskContextMenu: _showTaskContextMenu,
-                    ),
-                  // Add bottom padding to avoid FAB overlap if added later
-                  const SizedBox(height: 80),
-                ],
+                  );
+                },
               ),
             ),
           ),
+          // NEW CODE END
+        ],
+      ),
+    );
+  }
+
+  // Helper for menu items
+  PopupMenuItem _buildRadioItem(String text, bool selected, VoidCallback onTap) {
+    return PopupMenuItem(
+      onTap: onTap,
+      height: 40,
+      child: Row(
+        children: [
+          Icon(
+            selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+            color: selected ? GlassTheme.accentColor : Colors.white38,
+            size: 18,
+          ),
+          const SizedBox(width: 12),
+          Text(text, style: TextStyle(color: selected ? Colors.white : Colors.white70)),
         ],
       ),
     );
