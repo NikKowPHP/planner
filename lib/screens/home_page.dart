@@ -17,6 +17,7 @@ import '../services/logger.dart';
 import '../widgets/glass_rail.dart';
 import 'focus_page.dart';
 import '../widgets/calendar/glass_calendar.dart';
+import 'habit_page.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -153,6 +154,8 @@ class _HomePageState extends ConsumerState<HomePage> {
         );
       case AppTab.focus:
         return const FocusPage();
+      case AppTab.habit:
+        return const HabitPage();
       case AppTab.tasks:
         return _buildTaskContent(ref);
     }

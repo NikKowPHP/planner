@@ -4,6 +4,8 @@ import '../models/task.dart';
 import '../services/todo_service.dart';
 import '../services/auth_service.dart';
 import '../services/logger.dart';
+import '../models/habit.dart';
+import '../services/habit_service.dart';
 
 // --- Services ---
 
@@ -106,7 +108,7 @@ final filtersProvider = FutureProvider((ref) => ref.read(todoServiceProvider).ge
 
 enum GroupBy { date, priority, list, none }
 enum SortBy { date, priority, title }
-enum AppTab { tasks, calendar, focus }
+enum AppTab { tasks, calendar, focus, habit }
 
 class HomeViewState {
   final AppTab activeTab;
@@ -171,6 +173,7 @@ final currentTitleProvider = Provider<String>((ref) {
 
   if (activeTab == AppTab.focus) return 'Focus';
   if (activeTab == AppTab.calendar) return 'Calendar';
+  if (activeTab == AppTab.habit) return 'Habit';
 
   if (idx == -1) return 'Completed';
   if (idx == -2) return 'Trash';
@@ -356,4 +359,61 @@ final calendarTasksProvider = Provider<Map<DateTime, List<Task>>>((ref) {
     grouped[normalizedDate]!.add(task);
   }
   return grouped;
+});
+
+// --- Habit Providers ---
+final habitServiceProvider = Provider((ref) => HabitService());
+
+final habitsProvider = AsyncNotifierProvider<HabitsNotifier, List<Habit>>(
+  HabitsNotifier.new,
+);
+
+class HabitsNotifier extends AsyncNotifier<List<Habit>> {
+  @override
+  Future<List<Habit>> build() async {
+    return ref.read(habitServiceProvider).getHabits();
+  }
+
+  Future<void> createHabit(String name) async {
+    final newHabit = await ref.read(habitServiceProvider).createHabit(name);
+    state = AsyncData([...state.value ?? [], newHabit]);
+  }
+
+  Future<void> deleteHabit(String id) async {
+    await ref.read(habitServiceProvider).deleteHabit(id);
+    state = AsyncData((state.value ?? []).where((h) => h.id != id).toList());
+  }
+}
+
+// Fetches logs and groups them by Habit ID
+final habitLogsProvider = FutureProvider<Map<String, List<DateTime>>>((
+  ref,
+) async {
+  final habits = ref.watch(habitsProvider).asData?.value ?? [];
+  if (habits.isEmpty) return {};
+
+  final logs = await ref
+      .read(habitServiceProvider)
+      .getLogs(habits.map((h) => h.id).toList());
+
+  final Map<String, List<DateTime>> grouped = {};
+  for (var log in logs) {
+    if (grouped[log.habitId] == null) grouped[log.habitId] = [];
+    // Normalize to midnight
+    final d = DateTime(
+      log.completedAt.year,
+      log.completedAt.month,
+      log.completedAt.day,
+    );
+    grouped[log.habitId]!.add(d);
+  }
+  return grouped;
+});
+
+// Helper to toggle locally and remotely
+final habitToggleProvider = Provider((ref) {
+  return (String habitId, DateTime date) async {
+    await ref.read(habitServiceProvider).toggleHabitForDate(habitId, date);
+    ref.invalidate(habitLogsProvider); // Refresh logs
+  };
 });

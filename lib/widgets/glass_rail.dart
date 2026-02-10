@@ -46,6 +46,13 @@ class GlassRail extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             _RailItem(
+              icon: Icons.loop,
+              label: 'Habit',
+              isActive: activeTab == AppTab.habit,
+              onTap: () => onTabSelected(AppTab.habit),
+            ),
+            const SizedBox(height: 16),
+            _RailItem(
               icon: Icons.timer_outlined,
               label: 'Focus',
               isActive: activeTab == AppTab.focus,
