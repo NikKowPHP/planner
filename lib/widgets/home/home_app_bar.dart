@@ -1,26 +1,25 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../../providers/home_provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../providers/app_providers.dart';
 import '../../theme/glass_theme.dart';
-import '../../services/logger.dart';
 
-class HomeAppBar extends StatelessWidget {
+class HomeAppBar extends ConsumerWidget {
   const HomeAppBar({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final provider = Provider.of<HomeProvider>(context);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final title = ref.watch(currentTitleProvider);
+    final isLoading = ref.watch(tasksProvider).isLoading;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        // Title
         Row(
           children: [
             const Icon(Icons.menu, color: Colors.white, size: 28),
             const SizedBox(width: 16),
             Text(
-              provider.currentTitle,
+              title,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 24,
@@ -29,31 +28,33 @@ class HomeAppBar extends StatelessWidget {
             ),
           ],
         ),
-        
-        // Actions
         Row(
           children: [
-            if (provider.isLoading)
+            if (isLoading)
               const Padding(
                 padding: EdgeInsets.only(right: 16),
                 child: SizedBox(
-                  width: 16, height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white30),
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white30,
+                  ),
                 ),
               ),
-              
-            // Sort/Group Menu
-            _buildSortMenu(context, provider),
-            
-            // View Options
-            _buildViewMenu(context, provider),
+            _buildSortMenu(context, ref),
+            _buildViewMenu(context, ref),
           ],
         ),
       ],
     );
   }
 
-  Widget _buildSortMenu(BuildContext context, HomeProvider provider) {
+  Widget _buildSortMenu(BuildContext context, WidgetRef ref) {
+    final currentGroup = ref.watch(homeViewProvider.select((s) => s.groupBy));
+    final currentSort = ref.watch(homeViewProvider.select((s) => s.sortBy));
+    final notifier = ref.read(homeViewProvider.notifier);
+
     return Theme(
       data: Theme.of(context).copyWith(
         cardColor: const Color(0xFF1E1E1E),
@@ -68,24 +69,55 @@ class HomeAppBar extends StatelessWidget {
       child: PopupMenuButton<dynamic>(
         icon: const Icon(Icons.swap_vert, color: Colors.white),
         tooltip: 'Sort & Group',
-        onOpened: () => FileLogger().log('UI: Sort menu opened'),
         itemBuilder: (context) => [
           const PopupMenuItem(enabled: false, child: Text('GROUP BY', style: TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.bold))),
-          _buildRadioItem('Date', provider.groupBy == GroupBy.date, () => provider.setGroupBy(GroupBy.date)),
-          _buildRadioItem('Priority', provider.groupBy == GroupBy.priority, () => provider.setGroupBy(GroupBy.priority)),
-          _buildRadioItem('List', provider.groupBy == GroupBy.list, () => provider.setGroupBy(GroupBy.list)),
-          _buildRadioItem('None', provider.groupBy == GroupBy.none, () => provider.setGroupBy(GroupBy.none)),
+          _buildRadioItem(
+            'Date',
+            currentGroup == GroupBy.date,
+            () => notifier.setGroupBy(GroupBy.date),
+          ),
+          _buildRadioItem(
+            'Priority',
+            currentGroup == GroupBy.priority,
+            () => notifier.setGroupBy(GroupBy.priority),
+          ),
+          _buildRadioItem(
+            'List',
+            currentGroup == GroupBy.list,
+            () => notifier.setGroupBy(GroupBy.list),
+          ),
+          _buildRadioItem(
+            'None',
+            currentGroup == GroupBy.none,
+            () => notifier.setGroupBy(GroupBy.none),
+          ),
           const PopupMenuDivider(),
           const PopupMenuItem(enabled: false, child: Text('SORT BY', style: TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.bold))),
-          _buildRadioItem('Date', provider.sortBy == SortBy.date, () => provider.setSortBy(SortBy.date)),
-          _buildRadioItem('Priority', provider.sortBy == SortBy.priority, () => provider.setSortBy(SortBy.priority)),
-          _buildRadioItem('Title', provider.sortBy == SortBy.title, () => provider.setSortBy(SortBy.title)),
+          _buildRadioItem(
+            'Date',
+            currentSort == SortBy.date,
+            () => notifier.setSortBy(SortBy.date),
+          ),
+          _buildRadioItem(
+            'Priority',
+            currentSort == SortBy.priority,
+            () => notifier.setSortBy(SortBy.priority),
+          ),
+          _buildRadioItem(
+            'Title',
+            currentSort == SortBy.title,
+            () => notifier.setSortBy(SortBy.title),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildViewMenu(BuildContext context, HomeProvider provider) {
+  Widget _buildViewMenu(BuildContext context, WidgetRef ref) {
+    final hideCompleted = ref.watch(
+      homeViewProvider.select((s) => s.hideCompleted),
+    );
+    
     return Theme(
       data: Theme.of(context).copyWith(
         cardColor: const Color(0xFF1E1E1E),
@@ -99,21 +131,13 @@ class HomeAppBar extends StatelessWidget {
       ),
       child: PopupMenuButton<dynamic>(
         icon: const Icon(Icons.more_horiz, color: Colors.white),
-        tooltip: 'View Options',
-        onOpened: () => FileLogger().log('UI: View options menu opened'),
         itemBuilder: (context) => [
           CheckedPopupMenuItem(
-            checked: provider.hideCompleted,
+            checked: hideCompleted,
             value: 'hide',
-            onTap: provider.toggleHideCompleted,
             child: const Text('Hide Completed'),
-          ),
-          PopupMenuItem(
             onTap: () =>
-                FileLogger().log('UI: Print requested (not implemented)'),
-            child: const Row(
-              children: [Icon(Icons.print, size: 18, color: Colors.white70), SizedBox(width: 12), Text('Print')],
-            ),
+                ref.read(homeViewProvider.notifier).toggleHideCompleted(),
           ),
         ],
       ),

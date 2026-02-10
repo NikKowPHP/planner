@@ -1,34 +1,28 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../providers/auth_provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/app_providers.dart';
 import '../screens/auth/login_page.dart';
 
-class AuthGuard extends StatelessWidget {
+class AuthGuard extends ConsumerWidget {
   final Widget child;
 
-  const AuthGuard({
-    super.key,
-    required this.child,
-  });
+  const AuthGuard({super.key, required this.child});
 
   @override
-  Widget build(BuildContext context) {
-    return Consumer<AuthProvider>(
-      builder: (context, authProvider, _) {
-        if (authProvider.isLoading) {
-          return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
-          );
-        }
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(authUserProvider);
 
-        if (!authProvider.isAuthenticated) {
+    return authState.when(
+      data: (user) {
+        if (user == null) {
           return const LoginPage();
         }
-
         return child;
       },
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (err, stack) =>
+          Scaffold(body: Center(child: Text('Auth Error: $err'))),
     );
   }
 }

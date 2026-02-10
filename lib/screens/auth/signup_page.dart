@@ -1,22 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../widgets/liquid_background.dart';
 import '../../widgets/auth/glass_text_field.dart';
 import '../../widgets/auth/glass_button.dart';
 import '../../widgets/responsive_layout.dart';
-import '../../providers/auth_provider.dart';
+import '../../providers/app_providers.dart';
 import '../../config/supabase_config.dart';
 import 'login_page.dart';
 
-class SignupPage extends StatefulWidget {
+class SignupPage extends ConsumerStatefulWidget {
   const SignupPage({super.key});
 
   @override
-  State<SignupPage> createState() => _SignupPageState();
+  ConsumerState<SignupPage> createState() => _SignupPageState();
 }
 
-class _SignupPageState extends State<SignupPage> {
+class _SignupPageState extends ConsumerState<SignupPage> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -42,8 +42,8 @@ class _SignupPageState extends State<SignupPage> {
     });
 
     try {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      await authProvider.signUp(
+      final authService = ref.read(authServiceProvider);
+      await authService.signUp(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );

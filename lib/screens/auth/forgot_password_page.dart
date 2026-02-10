@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../widgets/liquid_background.dart';
 import '../../widgets/auth/glass_text_field.dart';
 import '../../widgets/auth/glass_button.dart';
-import '../../providers/auth_provider.dart';
+import '../../providers/app_providers.dart';
 
-class ForgotPasswordPage extends StatefulWidget {
+class ForgotPasswordPage extends ConsumerStatefulWidget {
   const ForgotPasswordPage({super.key});
 
   @override
-  State<ForgotPasswordPage> createState() => _ForgotPasswordPageState();
+  ConsumerState<ForgotPasswordPage> createState() => _ForgotPasswordPageState();
 }
 
-class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
+class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   bool _isLoading = false;
@@ -35,8 +35,8 @@ class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
     });
 
     try {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      await authProvider.resetPassword(email: _emailController.text.trim());
+      final authService = ref.read(authServiceProvider);
+      await authService.resetPassword(email: _emailController.text.trim());
 
       if (mounted) {
         setState(() {

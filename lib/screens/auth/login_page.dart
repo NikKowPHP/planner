@@ -1,23 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../widgets/liquid_background.dart';
 import '../../widgets/auth/glass_text_field.dart';
 import '../../widgets/auth/glass_button.dart';
 import '../../widgets/responsive_layout.dart';
-import '../../providers/auth_provider.dart';
+import '../../providers/app_providers.dart';
 import 'signup_page.dart';
 import 'forgot_password_page.dart';
 import '../../services/logger.dart';
 
-class LoginPage extends StatefulWidget {
+class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
 
   @override
-  State<LoginPage> createState() => _LoginPageState();
+  ConsumerState<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage> {
+class _LoginPageState extends ConsumerState<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -40,9 +40,9 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final authService = ref.read(authServiceProvider);
       await FileLogger().log('Login button pressed for ${_emailController.text.trim()}');
-      await authProvider.signIn(
+      await authService.signIn(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );

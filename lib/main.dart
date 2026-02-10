@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'theme/app_theme.dart';
 import 'screens/home_page.dart';
 import 'utils/ui_utils.dart';
 import 'config/supabase_config.dart';
-import 'providers/auth_provider.dart';
-import 'providers/home_provider.dart';
 import 'middleware/auth_guard.dart';
 
 void main() async {
@@ -15,7 +13,8 @@ void main() async {
   await SupabaseConfig.initialize();
   
   UIUtils.configureSystemUI();
-  runApp(const GlassyApp());
+  // Wrap app in ProviderScope for Riverpod
+  runApp(const ProviderScope(child: GlassyApp()));
 }
 
 class GlassyApp extends StatelessWidget {
@@ -23,19 +22,12 @@ class GlassyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => HomeProvider()),
-      ],
-      child: MaterialApp(
-        title: 'Glassy App',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.darkTheme,
-        themeMode: ThemeMode.dark,
-        home: const AuthGuard(
-          child: HomePage(),
-        ),
+    return MaterialApp(
+      title: 'Glassy App',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.darkTheme,
+      themeMode: ThemeMode.dark,
+      home: const AuthGuard(child: HomePage(),
       ),
     );
   }
