@@ -10,6 +10,7 @@ class Task {
   // NEW FIELDS
   final DateTime? deletedAt;
   final List<String> tagIds;
+  final bool isPinned;
 
   Task({
     required this.id,
@@ -22,6 +23,7 @@ class Task {
     this.priority = 0,
     this.deletedAt,
     this.tagIds = const [],
+    this.isPinned = false,
   });
 
   factory Task.fromJson(Map<String, dynamic> json) {
@@ -46,6 +48,7 @@ class Task {
           ? DateTime.parse(json['deleted_at'])
           : null,
       tagIds: tags,
+      isPinned: json['is_pinned'] ?? false,
     );
   }
 
@@ -59,6 +62,7 @@ class Task {
       'is_completed': isCompleted,
       'priority': priority,
       'deleted_at': deletedAt?.toIso8601String(),
+      'is_pinned': isPinned,
       // Note: tagIds are usually handled via separate inserts in Supabase,
       // not directly in the tasks table insert.
     };

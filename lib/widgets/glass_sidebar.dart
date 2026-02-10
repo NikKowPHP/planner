@@ -2,15 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../theme/glass_theme.dart';
 import 'glass_card.dart';
+import '../models/custom_filter.dart';
 
 class GlassSidebar extends StatelessWidget {
-  final int selectedIndex;
-  final Function(int) onItemSelected;
-  final List<dynamic> userLists;
-  final VoidCallback onAddList;
-  final List<String> tags;
-  final VoidCallback? onAddTag; // NEW
-
   const GlassSidebar({
     super.key,
     required this.selectedIndex,
@@ -18,8 +12,23 @@ class GlassSidebar extends StatelessWidget {
     required this.userLists,
     required this.onAddList,
     this.tags = const [],
-    this.onAddTag, // NEW
+    this.onAddTag,
+    this.customFilters = const [],
+    required this.onAddFilter,
+    required this.onEditFilter,
+    required this.onDeleteFilter,
   });
+
+  final int selectedIndex;
+  final Function(int) onItemSelected;
+  final List<dynamic> userLists;
+  final VoidCallback onAddList;
+  final List<String> tags;
+  final VoidCallback? onAddTag;
+  final List<CustomFilter> customFilters;
+  final VoidCallback onAddFilter;
+  final Function(CustomFilter) onEditFilter;
+  final Function(CustomFilter) onDeleteFilter;
 
   @override
   Widget build(BuildContext context) {
@@ -89,22 +98,35 @@ class GlassSidebar extends StatelessWidget {
 
                       // Filters Section
                       const SizedBox(height: 24),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        child: Text(
-                          "Filters",
-                          style: TextStyle(
-                            color: Colors.white38,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      _FilterPlaceholder(),
+                      _SectionHeader(title: "Filters", onAdd: onAddFilter),
+                      if (customFilters.isEmpty) _FilterPlaceholder(),
+                    ]),
+                  ),
 
+                  // Filters Dynamic Items
+                  SliverList(
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final filter = customFilters[index];
+                      final selectionIdx = 4 + index;
+                      return GestureDetector(
+                        onSecondaryTapUp: (details) => _showFilterContextMenu(
+                          context,
+                          details.globalPosition,
+                          filter,
+                        ),
+                        child: _SidebarItem(
+                          icon: Icons.filter_list,
+                          label: filter.name,
+                          isSelected: selectedIndex == selectionIdx,
+                          onTap: () => onItemSelected(selectionIdx),
+                          color: Colors.purpleAccent,
+                        ),
+                      );
+                    }, childCount: customFilters.length),
+                  ),
+
+                  SliverList(
+                    delegate: SliverChildListDelegate([
                       // Lists Section
                       const SizedBox(height: 24),
                       _SectionHeader(title: "Lists", onAdd: onAddList),
@@ -114,7 +136,7 @@ class GlassSidebar extends StatelessWidget {
                   // Lists Dynamic Items
                   SliverList(
                     delegate: SliverChildBuilderDelegate((context, index) {
-                      final selectionIdx = index + 4;
+                      final selectionIdx = 4 + customFilters.length + index;
                       final list = userLists[index];
                       return _SidebarItem(
                         icon: Icons.list,
@@ -199,6 +221,49 @@ class GlassSidebar extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  void _showFilterContextMenu(
+    BuildContext context,
+    Offset position,
+    CustomFilter filter,
+  ) {
+    showMenu(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy,
+        position.dx + 1,
+        position.dy + 1,
+      ),
+      color: const Color(0xFF1E1E1E),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: Colors.white10),
+      ),
+      items: [
+        PopupMenuItem(
+          onTap: () => onEditFilter(filter),
+          child: const Row(
+            children: [
+              Icon(Icons.edit, size: 16, color: Colors.white),
+              SizedBox(width: 8),
+              Text("Edit", style: TextStyle(color: Colors.white)),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          onTap: () => onDeleteFilter(filter),
+          child: const Row(
+            children: [
+              Icon(Icons.delete, size: 16, color: Colors.redAccent),
+              SizedBox(width: 8),
+              Text("Delete", style: TextStyle(color: Colors.redAccent)),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

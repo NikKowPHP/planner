@@ -7,10 +7,13 @@ import '../widgets/responsive_layout.dart';
 import '../models/task.dart';
 import '../models/task_list.dart';
 import '../models/tag.dart';
+import '../models/custom_filter.dart';
 import '../widgets/task_list_group.dart';
+import '../widgets/filter_editor_dialog.dart';
 import '../widgets/task_detail_panel.dart';
 import '../theme/glass_theme.dart';
 import '../services/todo_service.dart';
+import '../widgets/task_context_menu.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -31,6 +34,7 @@ class _HomePageState extends State<HomePage> {
   List<Task> _tasks = [];
   List<TaskList> _lists = [];
   List<Tag> _tags = [];
+  List<CustomFilter> _filters = [];
   bool _isLoading = true;
   Task? _selectedTask;
 
@@ -53,12 +57,14 @@ class _HomePageState extends State<HomePage> {
       final tasks = await _todoService.getTasks();
       final lists = await _todoService.getLists();
       final tags = await _todoService.getTags();
+      final filters = await _todoService.getFilters();
       
       if (mounted) {
         setState(() {
           _tasks = tasks;
           _lists = lists;
           _tags = tags;
+          _filters = filters;
           _isLoading = false;
         });
       }
@@ -105,14 +111,16 @@ class _HomePageState extends State<HomePage> {
         dueDate: defaultDate,
       );
       
-      setState(() {
-        final index = _tasks.indexWhere((t) => t.id == tempId);
-        if (index != -1) {
-          _tasks[index] = newTask;
-        } else {
-          _tasks.insert(0, newTask);
-        }
-      });
+      if (mounted) {
+        setState(() {
+          final index = _tasks.indexWhere((t) => t.id == tempId);
+          if (index != -1) {
+            _tasks[index] = newTask;
+          } else {
+            _tasks.insert(0, newTask);
+          }
+        });
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -226,6 +234,8 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _deleteTask(Task task) async {
+    if (!mounted) return;
+
     final index = _tasks.indexWhere((t) => t.id == task.id);
     if (index == -1) return;
 
@@ -240,6 +250,7 @@ class _HomePageState extends State<HomePage> {
       priority: originalTask.priority,
       listId: originalTask.listId,
       tagIds: originalTask.tagIds,
+      isPinned: originalTask.isPinned,
       deletedAt: DateTime.now(),
     );
 
@@ -260,6 +271,181 @@ class _HomePageState extends State<HomePage> {
         ).showSnackBar(SnackBar(content: Text('Error deleting task: $e')));
       }
     }
+  }
+
+  // NEW: Update Task Pin Status
+  Future<void> _toggleTaskPin(Task task) async {
+    final updatedTask = Task(
+      id: task.id,
+      userId: task.userId,
+      listId: task.listId,
+      title: task.title,
+      description: task.description,
+      dueDate: task.dueDate,
+      isCompleted: task.isCompleted,
+      priority: task.priority,
+      tagIds: task.tagIds,
+      isPinned: !task.isPinned, // Toggle
+    );
+    await _updateTaskGeneric(updatedTask);
+  }
+
+  // NEW: Duplicate Task
+  Future<void> _duplicateTask(Task task) async {
+    try {
+      final newTask = await _todoService.duplicateTask(task);
+      setState(() {
+        _tasks.insert(0, newTask);
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Task Duplicated')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
+  // NEW: Show Tag Selection Dialog
+  Future<void> _showTagSelectionDialog(Task task) async {
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: const Text('Manage Tags', style: TextStyle(color: Colors.white)),
+        content: SizedBox(
+          width: 300,
+          child: SingleChildScrollView(
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _tags.map((tag) {
+                final isSelected = task.tagIds.contains(tag.id);
+                return FilterChip(
+                  label: Text(tag.name),
+                  selected: isSelected,
+                  onSelected: (selected) {
+                    List<String> newTags = List.from(task.tagIds);
+                    if (selected) {
+                      newTags.add(tag.id);
+                    } else {
+                      newTags.remove(tag.id);
+                    }
+
+                    final updatedTask = Task(
+                      id: task.id,
+                      userId: task.userId,
+                      listId: task.listId,
+                      title: task.title,
+                      description: task.description,
+                      dueDate: task.dueDate,
+                      priority: task.priority,
+                      isCompleted: task.isCompleted,
+                      isPinned: task.isPinned,
+                      tagIds: newTags,
+                    );
+                    _updateTaskGeneric(updatedTask);
+                  },
+                  backgroundColor: Colors.white10,
+                  selectedColor: GlassTheme.accentColor.withValues(alpha: 0.3),
+                  labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.white70),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // NEW: Show Move To Dialog
+  Future<void> _showMoveToDialog(Task task) async {
+    await showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        child: Container(
+          width: 300,
+          height: 400,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              const Text(
+                'Move to List',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: ListView(
+                  children: [
+                    ListTile(
+                      title: const Text(
+                        'Inbox',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                      onTap: () {
+                        Navigator.pop(context);
+                        final updated = Task(
+                          id: task.id,
+                          userId: task.userId,
+                          title: task.title,
+                          description: task.description,
+                          dueDate: task.dueDate,
+                          priority: task.priority,
+                          isCompleted: task.isCompleted,
+                          isPinned: task.isPinned,
+                          tagIds: task.tagIds,
+                          listId: null,
+                        );
+                        _updateTaskGeneric(updated);
+                      },
+                    ),
+                    ..._lists.map(
+                      (l) => ListTile(
+                        title: Text(
+                          l.name,
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                        onTap: () {
+                          Navigator.pop(context);
+                          final updated = Task(
+                            id: task.id,
+                            userId: task.userId,
+                            title: task.title,
+                            description: task.description,
+                            dueDate: task.dueDate,
+                            priority: task.priority,
+                            isCompleted: task.isCompleted,
+                            isPinned: task.isPinned,
+                            tagIds: task.tagIds,
+                            listId: l.id,
+                          );
+                          _updateTaskGeneric(updated);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _setTaskPriority(Task task, int priority) async {
@@ -325,6 +511,8 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _updateTaskGeneric(Task updatedTask) async {
+    if (!mounted) return;
+
     final index = _tasks.indexWhere((t) => t.id == updatedTask.id);
     if (index == -1) return;
 
@@ -350,235 +538,57 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _showEditTaskDialog(Task task) async {
-    final titleController = TextEditingController(text: task.title);
-    final descController = TextEditingController(text: task.description);
 
-    await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text('Edit Task', style: TextStyle(color: Colors.white)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Title',
-                labelStyle: TextStyle(color: Colors.white70),
-                enabledBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.white30),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: descController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Description',
-                labelStyle: TextStyle(color: Colors.white70),
-                enabledBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.white30),
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () async {
-              if (titleController.text.trim().isNotEmpty) {
-                final updatedTask = Task(
-                  id: task.id,
-                  userId: task.userId,
-                  listId: task.listId,
-                  title: titleController.text.trim(),
-                  description: descController.text.trim(),
-                  dueDate: task.dueDate,
-                  isCompleted: task.isCompleted,
-                  priority: task.priority,
-                  tagIds: task.tagIds,
-                  deletedAt: task.deletedAt,
-                );
-                Navigator.pop(context);
-
-                final index = _tasks.indexWhere((t) => t.id == task.id);
-                if (index != -1) {
-                  final oldTask = _tasks[index];
-                  setState(() => _tasks[index] = updatedTask);
-                  try {
-                    await _todoService.updateTask(updatedTask);
-                  } catch (e) {
-                    if (mounted) setState(() => _tasks[index] = oldTask);
-                  }
-                }
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-  }
 
   void _showTaskContextMenu(Task task, TapUpDetails details) {
-    final isDesktop = ResponsiveLayout.isDesktop(context);
     final position = details.globalPosition;
 
-    final items = [
-      _ContextMenuItem('Edit', Icons.edit, () => _showEditTaskDialog(task)),
-      _ContextMenuItem(
-        'Set Date',
-        Icons.calendar_today,
-        () => _showDatePicker(task),
-      ),
-      _ContextMenuItem('Priority', Icons.flag, () => _showPrioritySheet(task)),
-      _ContextMenuItem(
-        'Delete',
-        Icons.delete_outline,
-        () => _deleteTask(task),
-        isDestructive: true,
-      ),
-    ];
-
-    if (isDesktop) {
-      showMenu(
-        context: context,
-        position: RelativeRect.fromLTRB(
-          position.dx,
-          position.dy,
-          position.dx + 1,
-          position.dy + 1,
-        ),
-        color: const Color(0xFF1E1E1E),
-        items: items
-            .map(
-              (item) => PopupMenuItem(
-                onTap: item.onTap,
-                child: Row(
-                  children: [
-                    Icon(
-                      item.icon,
-                      color: item.isDestructive
-                          ? Colors.redAccent
-                          : Colors.white70,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      item.title,
-                      style: TextStyle(
-                        color: item.isDestructive
-                            ? Colors.redAccent
-                            : Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            )
-            .toList(),
-      );
-    } else {
-      showModalBottomSheet(
-        context: context,
-        backgroundColor: Colors.transparent,
-        builder: (context) => Container(
-          padding: const EdgeInsets.symmetric(vertical: 24),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E1E1E).withValues(alpha: 0.95),
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-            border: Border.all(color: Colors.white10),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: items
-                .map(
-                  (item) => ListTile(
-                    leading: Icon(
-                      item.icon,
-                      color: item.isDestructive
-                          ? Colors.redAccent
-                          : Colors.white70,
-                    ),
-                    title: Text(
-                      item.title,
-                      style: TextStyle(
-                        color: item.isDestructive
-                            ? Colors.redAccent
-                            : Colors.white,
-                      ),
-                    ),
-                    onTap: () {
-                      Navigator.pop(context);
-                      item.onTap();
-                    },
-                  ),
-                )
-                .toList(),
-          ),
-        ),
-      );
-    }
-  }
-
-  void _showPrioritySheet(Task task) {
-    showModalBottomSheet(
+    showMenu(
       context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.symmetric(vertical: 24),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1E1E1E).withValues(alpha: 0.95),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Padding(
-              padding: EdgeInsets.only(bottom: 16),
-              child: Text(
-                'Select Priority',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                ),
-              ),
-            ),
-            _buildPriorityTile(task, 3, 'High', Colors.redAccent),
-            _buildPriorityTile(task, 2, 'Medium', Colors.orangeAccent),
-            _buildPriorityTile(task, 1, 'Low', Colors.blueAccent),
-            _buildPriorityTile(task, 0, 'None', Colors.grey),
-          ],
-        ),
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy,
+        position.dx + 1,
+        position.dy + 1,
       ),
-    );
-  }
-
-  Widget _buildPriorityTile(
-    Task task,
-    int priority,
-    String label,
-    Color color,
-  ) {
-    return ListTile(
-      leading: Icon(Icons.flag, color: color),
-      title: Text(label, style: const TextStyle(color: Colors.white)),
-      trailing: task.priority == priority
-          ? const Icon(Icons.check, color: Colors.white)
-          : null,
-      onTap: () {
-        Navigator.pop(context);
-        _setTaskPriority(task, priority);
-      },
+      color: const Color(0xFF1E1E1E),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: Colors.white10),
+      ),
+      constraints: const BoxConstraints(minWidth: 260, maxWidth: 260),
+      items: TaskContextMenu.buildItems(
+        context: context,
+        task: task,
+        onDateSelect: (date) {
+          if (date != null) {
+            _updateTaskDate(task, date);
+          } else {
+            _showDatePicker(task);
+          }
+        },
+        onPrioritySelect: (priority) => _setTaskPriority(task, priority),
+        onPin: () {
+          Navigator.pop(context);
+          _toggleTaskPin(task);
+        },
+        onDuplicate: () {
+          Navigator.pop(context);
+          _duplicateTask(task);
+        },
+        onMove: () {
+          Navigator.pop(context);
+          _showMoveToDialog(task);
+        },
+        onTags: () {
+          Navigator.pop(context);
+          _showTagSelectionDialog(task);
+        },
+        onDelete: () {
+          Navigator.pop(context);
+          _deleteTask(task);
+        },
+      ),
     );
   }
 
@@ -628,6 +638,83 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
     );
+  }
+
+  // NEW: CRUD Methods for Filters
+  void _createFilter() {
+    showDialog(
+      context: context,
+      builder: (context) => FilterEditorDialog(
+        onSave: (name, criteria) async {
+          try {
+            final newFilter = CustomFilter(
+              id: '',
+              userId: '',
+              name: name,
+              criteria: criteria,
+            );
+            final created = await _todoService.createFilter(newFilter);
+            setState(() => _filters.add(created));
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Error creating filter: $e')),
+              );
+            }
+          }
+        },
+      ),
+    );
+  }
+
+  void _editFilter(CustomFilter filter) {
+    showDialog(
+      context: context,
+      builder: (context) => FilterEditorDialog(
+        filter: filter,
+        onSave: (name, criteria) async {
+          try {
+            final updated = CustomFilter(
+              id: filter.id,
+              userId: filter.userId,
+              name: name,
+              icon: filter.icon,
+              color: filter.color,
+              criteria: criteria,
+            );
+            final result = await _todoService.updateFilter(updated);
+            setState(() {
+              final index = _filters.indexWhere((f) => f.id == filter.id);
+              if (index != -1) _filters[index] = result;
+            });
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Error updating filter: $e')),
+              );
+            }
+          }
+        },
+      ),
+    );
+  }
+
+  Future<void> _deleteFilter(CustomFilter filter) async {
+    try {
+      await _todoService.deleteFilter(filter.id);
+      setState(() {
+        _filters.removeWhere((f) => f.id == filter.id);
+        if (_selectedIndex >= 4 && _selectedIndex < 4 + _filters.length) {
+          _selectedIndex = 0;
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error deleting filter: $e')));
+      }
+    }
   }
 
   Future<void> _createList() async {
@@ -685,8 +772,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   List<Task> get _filteredTasks {
-    List<Task> filtered;
-
+    // Handle special views
     if (_selectedIndex == -2) {
       return _tasks.where((t) => t.deletedAt != null).toList();
     }
@@ -697,48 +783,76 @@ class _HomePageState extends State<HomePage> {
       return activeTasks.where((t) => t.isCompleted).toList();
     }
 
-    switch (_selectedIndex) {
-      case 0:
-        filtered = activeTasks;
-        break;
-      case 1:
-        final now = _stripTime(DateTime.now());
-        filtered = activeTasks.where((t) {
-          if (t.dueDate == null) return false;
-          final tDate = _stripTime(t.dueDate!);
-          return tDate.isAtSameMomentAs(now);
-        }).toList();
-        break;
-      case 2:
-        final now = _stripTime(DateTime.now());
-        final nextWeek = now.add(const Duration(days: 7));
-        filtered = activeTasks.where((t) {
-          if (t.dueDate == null) return false;
-          final tDate = _stripTime(t.dueDate!);
-          return !tDate.isBefore(now) && tDate.isBefore(nextWeek);
-        }).toList();
-        break;
-      case 3:
-        filtered = activeTasks.where((t) => t.listId == null).toList();
-        break;
-      default:
-        final listCount = _lists.length;
-        if (_selectedIndex >= 4 && _selectedIndex < 4 + listCount) {
-          final listId = _lists[_selectedIndex - 4].id;
-          filtered = activeTasks.where((t) => t.listId == listId).toList();
-        } else if (_selectedIndex >= 4 + listCount) {
-          final tagIndex = _selectedIndex - (4 + listCount);
-          if (tagIndex >= 0 && tagIndex < _tags.length) {
-            final tagId = _tags[tagIndex].id;
-            filtered = activeTasks
-                .where((t) => t.tagIds.contains(tagId))
-                .toList();
-          } else {
-            filtered = [];
-          }
-        } else {
+    // Calculate index boundaries
+    final filterStartIndex = 4;
+    final listStartIndex = 4 + _filters.length;
+    final tagStartIndex = listStartIndex + _lists.length;
+
+    List<Task> filtered;
+
+    // Standard Views (0-3)
+    if (_selectedIndex >= 0 && _selectedIndex < 4) {
+      switch (_selectedIndex) {
+        case 0:
+          filtered = activeTasks;
+          break;
+        case 1:
+          final now = _stripTime(DateTime.now());
+          filtered = activeTasks.where((t) {
+            if (t.dueDate == null) return false;
+            final tDate = _stripTime(t.dueDate!);
+            return tDate.isAtSameMomentAs(now);
+          }).toList();
+          break;
+        case 2:
+          final now = _stripTime(DateTime.now());
+          final nextWeek = now.add(const Duration(days: 7));
+          filtered = activeTasks.where((t) {
+            if (t.dueDate == null) return false;
+            final tDate = _stripTime(t.dueDate!);
+            return !tDate.isBefore(now) && tDate.isBefore(nextWeek);
+          }).toList();
+          break;
+        case 3:
+          filtered = activeTasks.where((t) => t.listId == null).toList();
+          break;
+        default:
           filtered = [];
-        }
+      }
+    }
+    // Custom Filters
+    else if (_selectedIndex >= filterStartIndex &&
+        _selectedIndex < listStartIndex) {
+      final filterIndex = _selectedIndex - filterStartIndex;
+      if (filterIndex >= 0 && filterIndex < _filters.length) {
+        final filter = _filters[filterIndex];
+        filtered = activeTasks.where((t) => filter.matches(t)).toList();
+      } else {
+        filtered = [];
+      }
+    }
+    // Lists
+    else if (_selectedIndex >= listStartIndex &&
+        _selectedIndex < tagStartIndex) {
+      final listIndex = _selectedIndex - listStartIndex;
+      if (listIndex >= 0 && listIndex < _lists.length) {
+        final listId = _lists[listIndex].id;
+        filtered = activeTasks.where((t) => t.listId == listId).toList();
+      } else {
+        filtered = [];
+      }
+    }
+    // Tags
+    else if (_selectedIndex >= tagStartIndex) {
+      final tagIndex = _selectedIndex - tagStartIndex;
+      if (tagIndex >= 0 && tagIndex < _tags.length) {
+        final tagId = _tags[tagIndex].id;
+        filtered = activeTasks.where((t) => t.tagIds.contains(tagId)).toList();
+      } else {
+        filtered = [];
+      }
+    } else {
+      filtered = [];
     }
 
     if (_hideCompleted) {
@@ -862,28 +976,52 @@ class _HomePageState extends State<HomePage> {
     if (_selectedIndex == -1) return 'Completed';
     if (_selectedIndex == -2) return 'Trash';
 
-    switch (_selectedIndex) {
-      case 0:
-        return 'All';
-      case 1:
-        return 'Today';
-      case 2:
-        return 'Next 7 Days';
-      case 3:
-        return 'Inbox';
-      default:
-        final listCount = _lists.length;
-        if (_selectedIndex >= 4 && _selectedIndex < 4 + listCount) {
-          return _lists[_selectedIndex - 4].name;
-        }
-        if (_selectedIndex >= 4 + listCount) {
-          final tagIndex = _selectedIndex - (4 + listCount);
-          if (tagIndex >= 0 && tagIndex < _tags.length) {
-            return '# ${_tags[tagIndex].name}';
-          }
-        }
-        return 'Glassy';
+    // Calculate index boundaries
+    final filterStartIndex = 4;
+    final listStartIndex = 4 + _filters.length;
+    final tagStartIndex = listStartIndex + _lists.length;
+
+    // Standard views
+    if (_selectedIndex >= 0 && _selectedIndex < 4) {
+      switch (_selectedIndex) {
+        case 0:
+          return 'All';
+        case 1:
+          return 'Today';
+        case 2:
+          return 'Next 7 Days';
+        case 3:
+          return 'Inbox';
+        default:
+          return 'Glassy';
+      }
     }
+
+    // Custom Filters
+    if (_selectedIndex >= filterStartIndex && _selectedIndex < listStartIndex) {
+      final filterIndex = _selectedIndex - filterStartIndex;
+      if (filterIndex >= 0 && filterIndex < _filters.length) {
+        return _filters[filterIndex].name;
+      }
+    }
+
+    // Lists
+    if (_selectedIndex >= listStartIndex && _selectedIndex < tagStartIndex) {
+      final listIndex = _selectedIndex - listStartIndex;
+      if (listIndex >= 0 && listIndex < _lists.length) {
+        return _lists[listIndex].name;
+      }
+    }
+
+    // Tags
+    if (_selectedIndex >= tagStartIndex) {
+      final tagIndex = _selectedIndex - tagStartIndex;
+      if (tagIndex >= 0 && tagIndex < _tags.length) {
+        return '# ${_tags[tagIndex].name}';
+      }
+    }
+
+    return 'Glassy';
   }
 
   String get _inputPlaceholder {
@@ -921,8 +1059,12 @@ class _HomePageState extends State<HomePage> {
                   selectedIndex: _selectedIndex,
                   userLists: _lists,
                   tags: _tags.map((t) => t.name).toList(),
+                  customFilters: _filters,
                   onAddList: _createList,
                   onAddTag: _createTag,
+                  onAddFilter: _createFilter,
+                  onEditFilter: _editFilter,
+                  onDeleteFilter: _deleteFilter,
                   onItemSelected: (index) {
                     setState(() {
                       _selectedIndex = index;
@@ -1232,18 +1374,4 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
-}
-
-class _ContextMenuItem {
-  final String title;
-  final IconData icon;
-  final VoidCallback onTap;
-  final bool isDestructive;
-
-  _ContextMenuItem(
-    this.title,
-    this.icon,
-    this.onTap, {
-    this.isDestructive = false,
-  });
 }

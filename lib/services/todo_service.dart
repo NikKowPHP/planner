@@ -3,6 +3,7 @@ import '../config/supabase_config.dart';
 import '../models/task.dart';
 import '../models/task_list.dart';
 import '../models/tag.dart';
+import '../models/custom_filter.dart';
 import '../services/logger.dart';
 
 class TodoService {
@@ -106,6 +107,7 @@ class TodoService {
     String? description,
     DateTime? dueDate,
     int priority = 0,
+    bool isPinned = false,
   }) async {
     try {
       final user = _supabase.auth.currentUser;
@@ -133,6 +135,7 @@ class TodoService {
             'description': description,
             'due_date': dueDate?.toIso8601String(),
             'priority': priority,
+            'is_pinned': isPinned,
           })
           .select()
           .single();
@@ -160,6 +163,7 @@ class TodoService {
             'due_date': task.dueDate?.toIso8601String(),
             'list_id': task.listId,
             'deleted_at': task.deletedAt?.toIso8601String(),
+            'is_pinned': task.isPinned,
           })
           .eq('id', task.id)
           .select()
@@ -243,6 +247,120 @@ class TodoService {
       return Tag.fromJson(response);
     } catch (e, stack) {
       await _logger.error('Error creating tag: $name', e, stack);
+      rethrow;
+    }
+  }
+
+  // NEW METHOD: Duplicate Task
+  Future<Task> duplicateTask(Task task) async {
+    try {
+      await _logger.log('Duplicating task: ${task.id}');
+
+      // 1. Create the task copy
+      final newTask = await createTask(
+        title: task.title,
+        description: task.description,
+        listId: task.listId,
+        dueDate: task.dueDate,
+        priority: task.priority,
+        isPinned: task.isPinned,
+      );
+
+      // 2. Copy tags (if any)
+      if (task.tagIds.isNotEmpty) {
+        final tagInserts = task.tagIds
+            .map((tagId) => {'task_id': newTask.id, 'tag_id': tagId})
+            .toList();
+
+        await _supabase.from('task_tags').insert(tagInserts);
+
+        // Return task with tags (manually add since insert return doesn't join)
+        return Task(
+          id: newTask.id,
+          userId: newTask.userId,
+          title: newTask.title,
+          description: newTask.description,
+          dueDate: newTask.dueDate,
+          priority: newTask.priority,
+          isPinned: newTask.isPinned,
+          listId: newTask.listId,
+          tagIds: task.tagIds,
+        );
+      }
+
+      return newTask;
+    } catch (e, stack) {
+      await _logger.error('Error duplicating task: ${task.id}', e, stack);
+      rethrow;
+    }
+  }
+
+  // --- CUSTOM FILTERS ---
+
+  Future<List<CustomFilter>> getFilters() async {
+    try {
+      await _logger.log('Fetching filters...');
+      final response = await _supabase
+          .from('custom_filters')
+          .select()
+          .order('name');
+      return (response as List).map((e) => CustomFilter.fromJson(e)).toList();
+    } catch (e, stack) {
+      await _logger.error('Error fetching filters', e, stack);
+      rethrow;
+    }
+  }
+
+  Future<CustomFilter> createFilter(CustomFilter filter) async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) throw Exception('User not logged in');
+
+      final response = await _supabase
+          .from('custom_filters')
+          .insert({
+            'user_id': user.id,
+            'name': filter.name,
+            'icon': filter.icon,
+            'color': filter.color,
+            'criteria': filter.criteria.toJson(),
+          })
+          .select()
+          .single();
+      return CustomFilter.fromJson(response);
+    } catch (e, stack) {
+      await _logger.error('Error creating filter', e, stack);
+      rethrow;
+    }
+  }
+
+  Future<void> deleteFilter(String id) async {
+    try {
+      await _logger.log('Deleting filter: $id');
+      await _supabase.from('custom_filters').delete().eq('id', id);
+    } catch (e, stack) {
+      await _logger.error('Error deleting filter: $id', e, stack);
+      rethrow;
+    }
+  }
+
+  Future<CustomFilter> updateFilter(CustomFilter filter) async {
+    try {
+      await _logger.log('Updating filter: ${filter.id}');
+      final response = await _supabase
+          .from('custom_filters')
+          .update({
+            'name': filter.name,
+            'icon': filter.icon,
+            'color': filter.color,
+            'criteria': filter.criteria.toJson(),
+          })
+          .eq('id', filter.id)
+          .select()
+          .single();
+      return CustomFilter.fromJson(response);
+    } catch (e, stack) {
+      await _logger.error('Error updating filter: ${filter.id}', e, stack);
       rethrow;
     }
   }

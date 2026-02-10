@@ -110,6 +110,13 @@ class TaskItem extends StatelessWidget {
                 ),
               ),
 
+            // Pin Indicator
+            if (task.isPinned)
+              const Padding(
+                padding: EdgeInsets.only(left: 8),
+                child: Icon(Icons.push_pin, size: 14, color: Colors.white54),
+              ),
+
              // List Name (e.g. Inbox)
             Padding(
               padding: const EdgeInsets.only(left: 12),
