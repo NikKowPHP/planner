@@ -64,9 +64,28 @@ class GlassSidebar extends StatelessWidget {
             Expanded(
               child: CustomScrollView(
                 slivers: [
-                  // Standard Items
+                  // Views Section
                   SliverList(
                     delegate: SliverChildListDelegate([
+                      const _SectionHeaderNoAdd(title: "Views"),
+                      _SidebarItem(
+                        icon: Icons.check_box_outlined,
+                        label: 'Tasks',
+                        isSelected: selectedIndex != 99,
+                        onTap: () {
+                          if (selectedIndex == 99) onItemSelected(0);
+                        },
+                      ),
+                      _SidebarItem(
+                        icon: Icons.calendar_month,
+                        label: 'Calendar',
+                        isSelected: selectedIndex == 99,
+                        onTap: () => onItemSelected(99),
+                        color: Colors.purpleAccent,
+                      ),
+                      const SizedBox(height: 24),
+
+                      const _SectionHeaderNoAdd(title: "Smart Lists"),
                       _SidebarItem(
                         icon: Icons.calendar_today_rounded,
                         label: 'All',
@@ -294,6 +313,26 @@ class _SectionHeader extends StatelessWidget {
             child: const Icon(Icons.add, size: 16, color: Colors.white54),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SectionHeaderNoAdd extends StatelessWidget {
+  final String title;
+  const _SectionHeaderNoAdd({required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 12, right: 4, bottom: 8),
+      child: Text(
+        title,
+        style: const TextStyle(
+          color: Colors.white38,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }

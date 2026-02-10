@@ -161,6 +161,8 @@ final currentTitleProvider = Provider<String>((ref) {
   final lists = ref.watch(listsProvider).asData?.value ?? [];
   final tags = ref.watch(tagsProvider).asData?.value ?? [];
 
+  if (idx == 99) return 'Calendar';
+
   if (idx == -1) return 'Completed';
   if (idx == -2) return 'Trash';
 
@@ -322,4 +324,27 @@ final groupedTasksProvider = Provider<Map<String, List<Task>>>((ref) {
   }
 
   return {'Tasks': tasks};
+});
+
+// --- Calendar State ---
+
+final calendarTasksProvider = Provider<Map<DateTime, List<Task>>>((ref) {
+  final tasks = ref.watch(tasksProvider).asData?.value ?? [];
+
+  final Map<DateTime, List<Task>> grouped = {};
+
+  for (var task in tasks) {
+    // Skip deleted or tasks without dates
+    if (task.deletedAt != null || task.dueDate == null) continue;
+
+    // Normalize date to midnight for the key
+    final date = task.dueDate!;
+    final normalizedDate = DateTime(date.year, date.month, date.day);
+
+    if (grouped[normalizedDate] == null) {
+      grouped[normalizedDate] = [];
+    }
+    grouped[normalizedDate]!.add(task);
+  }
+  return grouped;
 });

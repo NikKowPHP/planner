@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../models/task.dart';
 import '../models/task_list.dart';
 import '../theme/glass_theme.dart';
+import '../services/logger.dart'; // Ensure logger is imported
 
 class TaskDetailPanel extends StatefulWidget {
   final Task task;
@@ -98,6 +99,12 @@ class _TaskDetailPanelState extends State<TaskDetailPanel> {
   }
 
   Future<void> _showMoveToDialog() async {
+    await FileLogger().log(
+      'UI: TaskDetailPanel Move To Dialog opened for task ${widget.task.id}',
+    );
+
+    if (!mounted) return;
+
     await showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -159,6 +166,9 @@ class _TaskDetailPanelState extends State<TaskDetailPanel> {
     return InkWell(
       onTap: () {
         Navigator.pop(context);
+        FileLogger().log(
+          'UI: TaskDetailPanel moved task ${widget.task.id} to list ${listId ?? "Inbox"}',
+        );
         _handleListChange(listId);
       },
       child: Container(

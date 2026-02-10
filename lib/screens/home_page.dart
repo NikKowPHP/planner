@@ -14,6 +14,7 @@ import '../models/task.dart';
 import '../models/custom_filter.dart';
 import '../widgets/task_context_menu.dart';
 import '../services/logger.dart';
+import '../widgets/calendar/glass_calendar.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -107,6 +108,33 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 
   Widget _buildMainContent(WidgetRef ref) {
+    final selectedIndex = ref.watch(
+      homeViewProvider.select((s) => s.selectedIndex),
+    );
+
+    if (selectedIndex == 99) {
+      return Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const HomeAppBar(),
+            const SizedBox(height: 24),
+            Expanded(
+              child: GlassCalendar(
+                onTaskTap: (task) {
+                  ref.read(homeViewProvider.notifier).selectTask(task);
+                  if (!ResponsiveLayout.isDesktop(context)) {
+                    _showMobileDetailSheet(context, ref, task);
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     final groupedTasks = ref.watch(groupedTasksProvider);
 
     return Padding(
@@ -262,6 +290,114 @@ class _HomePageState extends ConsumerState<HomePage> {
      }));
   }
 
+  Future<void> _showMoveToDialog(
+    BuildContext context,
+    WidgetRef ref,
+    Task task,
+  ) async {
+    await _logger.log('UI: Opening Move To Dialog for task ${task.id}');
+
+    final lists = ref.read(listsProvider).value ?? [];
+
+    if (!context.mounted) return;
+
+    await showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Container(
+          width: 300,
+          padding: const EdgeInsets.all(16),
+          constraints: const BoxConstraints(maxHeight: 400),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Move to List',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.inbox, color: Colors.white54),
+                        title: const Text(
+                          'Inbox',
+                          style: TextStyle(color: Colors.white),
+                        ),
+                        onTap: () {
+                          Navigator.pop(context);
+                          final updated = Task(
+                            id: task.id,
+                            userId: task.userId,
+                            title: task.title,
+                            description: task.description,
+                            dueDate: task.dueDate,
+                            priority: task.priority,
+                            isCompleted: task.isCompleted,
+                            isPinned: task.isPinned,
+                            tagIds: task.tagIds,
+                            listId: null, // Move to Inbox
+                          );
+                          _safeAction(
+                            () => ref
+                                .read(tasksProvider.notifier)
+                                .updateTask(updated),
+                            'Move to Inbox',
+                          );
+                        },
+                      ),
+                      ...lists.map(
+                        (l) => ListTile(
+                          leading: const Icon(
+                            Icons.list,
+                            color: Colors.white54,
+                          ),
+                          title: Text(
+                            l.name,
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                          onTap: () {
+                            Navigator.pop(context);
+                            final updated = Task(
+                              id: task.id,
+                              userId: task.userId,
+                              title: task.title,
+                              description: task.description,
+                              dueDate: task.dueDate,
+                              priority: task.priority,
+                              isCompleted: task.isCompleted,
+                              isPinned: task.isPinned,
+                              tagIds: task.tagIds,
+                              listId: l.id, // Move to specific list
+                            );
+                            _safeAction(
+                              () => ref
+                                  .read(tasksProvider.notifier)
+                                  .updateTask(updated),
+                              'Move to ${l.name}',
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showMobileDetailSheet(BuildContext context, WidgetRef ref, Task task) {
      showModalBottomSheet(
         context: context,
@@ -316,7 +452,11 @@ class _HomePageState extends ConsumerState<HomePage> {
               Navigator.pop(context);
               _safeAction(() => notifier.createTask(task.title), 'Context: Duplicate');
            },
-           onMove: () { Navigator.pop(context); /* Implement Move Logic */ },
+        // MODIFIED: Connected the dialog here
+        onMove: () {
+          Navigator.pop(context);
+          _showMoveToDialog(context, ref, task);
+        },
            onTags: () { Navigator.pop(context); /* Implement Tag Logic */ },
            onDelete: () { 
               Navigator.pop(context); 
