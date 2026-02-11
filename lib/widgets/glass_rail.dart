@@ -61,6 +61,14 @@ class GlassRail extends ConsumerWidget {
               isActive: activeTab == AppTab.focus,
               onTap: () => onTabSelected(AppTab.focus),
             ),
+            // NEW: Docs Item
+            const SizedBox(height: 16),
+            _RailItem(
+              icon: Icons.article_outlined,
+              label: 'Docs',
+              isActive: activeTab == AppTab.docs,
+              onTap: () => onTabSelected(AppTab.docs),
+            ),
 
             const Spacer(),
             

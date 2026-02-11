@@ -51,6 +51,12 @@ class GlassNavigationBar extends StatelessWidget {
                 isSelected: currentTab == AppTab.focus,
                 onTap: () => onTabSelected(AppTab.focus),
               ),
+              _NavBarItem(
+                icon: Icons.article_outlined,
+                label: 'Docs',
+                isSelected: currentTab == AppTab.docs,
+                onTap: () => onTabSelected(AppTab.docs),
+              ),
             ],
           ),
         ),

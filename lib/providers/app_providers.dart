@@ -10,6 +10,8 @@ import '../services/habit_service.dart';
 import '../models/focus_session.dart';
 import '../services/focus_service.dart';
 import '../services/notification_service.dart';
+import '../models/page_model.dart';
+import '../services/page_service.dart';
 
 // --- Services ---
 
@@ -162,7 +164,7 @@ final filtersProvider = FutureProvider((ref) => ref.read(todoServiceProvider).ge
 
 enum GroupBy { date, priority, list, none }
 enum SortBy { date, priority, title }
-enum AppTab { tasks, calendar, focus, habit }
+enum AppTab { tasks, calendar, habit, focus, docs }
 
 class HomeViewState {
   final AppTab activeTab;
@@ -628,4 +630,98 @@ final searchResultsProvider = Provider<Map<String, List<dynamic>>>((ref) {
     'Lists': lists.where((l) => matches(l.name)).toList(),
     'Tags': tags.where((tag) => matches(tag.name)).toList(),
   }..removeWhere((key, value) => value.isEmpty);
+});
+
+// --- Page / Docs Providers ---
+
+final pageServiceProvider = Provider((ref) => PageService());
+
+final pagesProvider = AsyncNotifierProvider<PagesNotifier, List<PageModel>>(PagesNotifier.new);
+
+class PagesNotifier extends AsyncNotifier<List<PageModel>> {
+  @override
+  Future<List<PageModel>> build() async {
+    return ref.read(pageServiceProvider).getPages();
+  }
+
+  Future<void> createPage({String? parentId}) async {
+    final newPage = await ref.read(pageServiceProvider).createPage(parentId: parentId);
+    final current = state.value ?? [];
+    state = AsyncData([newPage, ...current]);
+    
+    // Auto-select the new page
+    ref.read(selectedPageIdProvider.notifier).state = newPage.id;
+    
+    // If parent exists, ensure parent is expanded
+    if (parentId != null) {
+      await toggleExpand(parentId, true);
+    }
+  }
+
+  Future<void> updatePage(String id, {String? title, String? content, String? icon}) async {
+    final updates = <String, dynamic>{};
+    if (title != null) updates['title'] = title;
+    if (content != null) updates['content'] = content;
+    if (icon != null) updates['icon'] = icon;
+    
+    await ref.read(pageServiceProvider).updatePage(id, updates);
+    
+    // Optimistic update
+    final current = state.value ?? [];
+    state = AsyncData(current.map((p) {
+      if (p.id == id) {
+        return PageModel(
+          id: p.id, userId: p.userId, parentId: p.parentId,
+          title: title ?? p.title,
+          content: content ?? p.content,
+          icon: icon ?? p.icon,
+          isExpanded: p.isExpanded,
+          updatedAt: DateTime.now(),
+        );
+      }
+      return p;
+    }).toList());
+  }
+
+  Future<void> toggleExpand(String id, [bool? forceState]) async {
+    final current = state.value ?? [];
+    final page = current.firstWhere((p) => p.id == id);
+    final newState = forceState ?? !page.isExpanded;
+    
+    // Update local state immediately for UI responsiveness
+    state = AsyncData(current.map((p) => p.id == id 
+        ? PageModel(
+            id: p.id, userId: p.userId, parentId: p.parentId, 
+            title: p.title, content: p.content, icon: p.icon, 
+            isExpanded: newState, updatedAt: p.updatedAt) 
+        : p).toList());
+        
+    // Sync expansion state to DB so it persists
+    await ref.read(pageServiceProvider).updatePage(id, {'is_expanded': newState});
+  }
+
+  Future<void> deletePage(String id) async {
+    await ref.read(pageServiceProvider).deletePage(id);
+    final current = state.value ?? [];
+    // Remove page and its children (optimistic, though DB cascades)
+    state = AsyncData(current.where((p) => p.id != id && p.parentId != id).toList());
+    
+    if (ref.read(selectedPageIdProvider) == id) {
+      ref.read(selectedPageIdProvider.notifier).state = null;
+    }
+  }
+}
+
+// Tracks currently open page in the editor
+final selectedPageIdProvider = StateProvider<String?>((ref) => null);
+
+// Helper: Get currently selected page object
+final selectedPageProvider = Provider<PageModel?>((ref) {
+  final selectedId = ref.watch(selectedPageIdProvider);
+  final pages = ref.watch(pagesProvider).asData?.value ?? [];
+  try {
+    return pages.firstWhere((p) => p.id == selectedId);
+  } catch (_) {
+    return null;
+  }
 });

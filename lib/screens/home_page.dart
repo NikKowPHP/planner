@@ -22,6 +22,10 @@ import '../widgets/calendar/glass_calendar.dart';
 import 'habit_page.dart';
 import '../models/task_list.dart';
 
+// Import new widgets for Docs
+import 'docs_page.dart';
+import '../widgets/docs/docs_sidebar.dart';
+
 // NEW: Define Intent
 class SearchIntent extends Intent {
   const SearchIntent();
@@ -135,8 +139,8 @@ class _HomePageState extends ConsumerState<HomePage> {
         child: Scaffold(
           key: _scaffoldKey, // Attach Key
           extendBody: true,
-        // Only show Drawer on mobile and when on Tasks tab
-        drawer: (!isDesktop && activeTab == AppTab.tasks)
+        // Only show Drawer on mobile and when on Tasks or Docs tab
+        drawer: (!isDesktop && (activeTab == AppTab.tasks || activeTab == AppTab.docs))
             ? Drawer(
                 backgroundColor: const Color(0xFF0F0F0F),
                 width: 300,
@@ -146,7 +150,10 @@ class _HomePageState extends ConsumerState<HomePage> {
                     Expanded(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                        child: sidebar,
+                        // Swap sidebar based on tab
+                        child: activeTab == AppTab.docs 
+                            ? const DocsSidebar(width: double.infinity) 
+                            : sidebar,
                       ),
                     ),
                   ],
@@ -177,6 +184,24 @@ class _HomePageState extends ConsumerState<HomePage> {
                         maxWidth: 250,
                         alignment: Alignment.centerLeft,
                         child: isSidebarVisible ? sidebar : const SizedBox.shrink(),
+                      ),
+                    ),
+                  ),
+                
+                // NEW: Docs Sidebar
+                if (activeTab == AppTab.docs)
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                    width: isSidebarVisible ? (isDesktop ? 250 : 0) : 0,
+                    child: ClipRect(
+                      child: OverflowBox(
+                        minWidth: 250,
+                        maxWidth: 250,
+                        alignment: Alignment.centerLeft,
+                        child: isSidebarVisible 
+                            ? DocsSidebar(width: 250) 
+                            : const SizedBox.shrink(),
                       ),
                     ),
                   ),
@@ -280,6 +305,8 @@ class _HomePageState extends ConsumerState<HomePage> {
         );
       case AppTab.focus:
         return const FocusPage();
+      case AppTab.docs:
+        return const DocsPage();
       case AppTab.habit:
         return const HabitPage();
       case AppTab.tasks:
