@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_providers.dart';
 import '../models/page_model.dart';
 import '../theme/glass_theme.dart';
-
+import '../widgets/responsive_layout.dart';
 import '../utils/markdown_controller.dart';
 
 // --- Slash Command Model ---
@@ -39,9 +39,8 @@ class DocsPage extends ConsumerStatefulWidget {
 class _DocsPageState extends ConsumerState<DocsPage> {
   final TextEditingController _titleController = TextEditingController();
 
-  // Use the custom controller
-  final MarkdownSyntaxTextEditingController _contentController =
-      MarkdownSyntaxTextEditingController();
+  // Use the custom controller - initialized in initState
+  late MarkdownSyntaxTextEditingController _contentController;
 
   final FocusNode _contentFocusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
@@ -95,6 +94,56 @@ class _DocsPageState extends ConsumerState<DocsPage> {
     super.initState();
     // Initialize filtered commands
     _filteredCommands = _allCommands;
+
+    // MODIFIED: Controller no longer needs a callback
+    _contentController = MarkdownSyntaxTextEditingController();
+  }
+
+  // NEW METHOD: Detects if the tap occurred inside a [link](page:id)
+  void _handleEditorTap() {
+    final text = _contentController.text;
+    final selection = _contentController.selection;
+
+    if (!selection.isValid || !selection.isCollapsed) return;
+
+    final cursor = selection.baseOffset;
+    final linkRegex = RegExp(r'\[.*?\]\(page:([a-f0-9\-]+)\)');
+
+    // Find all links and check if cursor is inside one
+    for (final match in linkRegex.allMatches(text)) {
+      if (cursor >= match.start && cursor <= match.end) {
+        final pageId = match.group(1);
+        if (pageId != null) {
+          _handleLinkTap(pageId);
+        }
+        break;
+      }
+    }
+  }
+
+  // Updated handler (Logic stays same, triggered differently)
+  void _handleLinkTap(String pageId) {
+    final isDesktop = ResponsiveLayout.isDesktop(context);
+    final keys = HardwareKeyboard.instance.logicalKeysPressed;
+
+    final isCtrl =
+        keys.contains(LogicalKeyboardKey.controlLeft) ||
+        keys.contains(LogicalKeyboardKey.controlRight) ||
+        keys.contains(LogicalKeyboardKey.metaLeft) ||
+        keys.contains(LogicalKeyboardKey.metaRight);
+
+    if (!isDesktop || isCtrl) {
+      final pages = ref.read(pagesProvider).value ?? [];
+      try {
+        pages.firstWhere((p) => p.id == pageId);
+        ref.read(selectedPageIdProvider.notifier).state = pageId;
+        _contentFocusNode.unfocus(); // Ensure view updates
+      } catch (e) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Page not found')));
+      }
+    }
   }
 
   @override
@@ -215,29 +264,17 @@ class _DocsPageState extends ConsumerState<DocsPage> {
     _save();
   }
 
+  // Updated create sub-page logic to fix content copying bug
   Future<void> _createSubPage(String before, String after) async {
     if (_activePageId == null) return;
 
-    // 1. Create page in DB
-    await ref.read(pagesProvider.notifier).createPage(parentId: _activePageId);
+    // 1. Create page in DB but DO NOT switch to it (shouldSelect: false)
+    final newPage = await ref
+        .read(pagesProvider.notifier)
+        .createPage(parentId: _activePageId, shouldSelect: false);
 
-    // 2. Get the new page (it becomes selected automatically by createPage, so check provider)
-    final newPageId = ref.read(selectedPageIdProvider);
-    // Note: createPage changes selection, so we actually want to stay here or insert link?
-    // Usually Notion creates it and opens it.
-    // Let's implement: Create it, insert link text "[Untitled](id)", keep focus here for now or let notifier switch.
-
-    // Wait for creation to settle
-    await Future.delayed(const Duration(milliseconds: 100));
-
-    final pages = ref.read(pagesProvider).value ?? [];
-    final newPage = pages.firstWhere((p) => p.id == newPageId);
-
-    // Go back to current page (because createPage switched us)
-    ref.read(selectedPageIdProvider.notifier).state = _activePageId;
-
-    // 3. Insert Link syntax
-    final linkText = '[Untitled](page:${newPage.id}) '; // Custom scheme
+    // 2. Insert Link using the returned ID
+    final linkText = '[Untitled](page:${newPage.id}) ';
     final newText = before + linkText + after;
 
     _contentController.value = TextEditingValue(
@@ -374,7 +411,12 @@ class _DocsPageState extends ConsumerState<DocsPage> {
   @override
   Widget build(BuildContext context) {
     final selectedPage = ref.watch(selectedPageProvider);
+    final allPages = ref.watch(pagesProvider).value ?? [];
+
     _syncControllers(selectedPage);
+
+    // Update controller's page list so it can resolve titles
+    _contentController.pages = allPages;
 
     if (selectedPage == null) {
       return const Center(
@@ -445,6 +487,7 @@ class _DocsPageState extends ConsumerState<DocsPage> {
                       ), // Space for slash menu at bottom
                     ),
                     onChanged: _onContentChanged,
+                    onTap: _handleEditorTap, // NEW: Handle link navigation here
                   ),
                 ),
 

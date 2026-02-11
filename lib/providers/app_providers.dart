@@ -644,18 +644,22 @@ class PagesNotifier extends AsyncNotifier<List<PageModel>> {
     return ref.read(pageServiceProvider).getPages();
   }
 
-  Future<void> createPage({String? parentId}) async {
+  Future<PageModel> createPage({String? parentId, bool shouldSelect = true}) async {
     final newPage = await ref.read(pageServiceProvider).createPage(parentId: parentId);
     final current = state.value ?? [];
     state = AsyncData([newPage, ...current]);
     
-    // Auto-select the new page
-    ref.read(selectedPageIdProvider.notifier).state = newPage.id;
+    if (shouldSelect) {
+      // Auto-select the new page
+      ref.read(selectedPageIdProvider.notifier).state = newPage.id;
+    }
     
     // If parent exists, ensure parent is expanded
     if (parentId != null) {
       await toggleExpand(parentId, true);
     }
+    
+    return newPage; // Return the created page
   }
 
   Future<void> updatePage(String id, {String? title, String? content, String? icon}) async {
