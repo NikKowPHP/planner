@@ -6,6 +6,8 @@ import '../services/auth_service.dart';
 import '../services/logger.dart';
 import '../models/habit.dart';
 import '../services/habit_service.dart';
+import '../models/focus_session.dart';
+import '../services/focus_service.dart';
 
 // --- Services ---
 
@@ -469,5 +471,26 @@ final habitToggleProvider = Provider((ref) {
   return (String habitId, DateTime date) async {
     await ref.read(habitServiceProvider).toggleHabitForDate(habitId, date);
     ref.invalidate(habitLogsProvider); // Refresh logs
+  };
+});
+
+// --- Focus Providers ---
+
+final focusServiceProvider = Provider((ref) => FocusService());
+
+final focusHistoryProvider = FutureProvider<List<FocusSession>>((ref) async {
+  return ref.read(focusServiceProvider).getHistory();
+});
+
+// Helper to refresh history after saving
+final focusSessionSaverProvider = Provider((ref) {
+  return ({required DateTime startTime, required int duration, String? taskId, String? habitId}) async {
+    await ref.read(focusServiceProvider).saveSession(
+      startTime: startTime,
+      durationSeconds: duration,
+      taskId: taskId,
+      habitId: habitId,
+    );
+    ref.invalidate(focusHistoryProvider);
   };
 });
