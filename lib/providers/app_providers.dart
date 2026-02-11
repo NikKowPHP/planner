@@ -383,6 +383,26 @@ class HabitsNotifier extends AsyncNotifier<List<Habit>> {
     await ref.read(habitServiceProvider).deleteHabit(id);
     state = AsyncData((state.value ?? []).where((h) => h.id != id).toList());
   }
+
+  Future<void> updateHabit(
+    String id, {
+    String? name,
+    String? icon,
+    String? color,
+    int? goalValue,
+  }) async {
+    final updated = await ref
+        .read(habitServiceProvider)
+        .updateHabit(
+          id,
+          name: name,
+          icon: icon,
+          color: color,
+          goalValue: goalValue,
+        );
+    final current = state.value ?? [];
+    state = AsyncData(current.map((h) => h.id == id ? updated : h).toList());
+  }
 }
 
 // Fetches logs and groups them by Habit ID

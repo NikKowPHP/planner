@@ -93,4 +93,31 @@ class HabitService {
       rethrow;
     }
   }
+
+  Future<Habit> updateHabit(
+    String habitId, {
+    String? name,
+    String? icon,
+    String? color,
+    int? goalValue,
+  }) async {
+    try {
+      final data = <String, dynamic>{};
+      if (name != null) data['name'] = name;
+      if (icon != null) data['icon'] = icon;
+      if (color != null) data['color'] = color;
+      if (goalValue != null) data['goal_value'] = goalValue;
+
+      final response = await _supabase
+          .from('habits')
+          .update(data)
+          .eq('id', habitId)
+          .select()
+          .single();
+      return Habit.fromJson(response);
+    } catch (e, s) {
+      await _logger.error('HabitService: Update failed', e, s);
+      rethrow;
+    }
+  }
 }
