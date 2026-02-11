@@ -374,8 +374,10 @@ class HabitsNotifier extends AsyncNotifier<List<Habit>> {
     return ref.read(habitServiceProvider).getHabits();
   }
 
-  Future<void> createHabit(String name) async {
-    final newHabit = await ref.read(habitServiceProvider).createHabit(name);
+  Future<void> createHabit(String name, {String? icon, String? color}) async {
+    final newHabit = await ref
+        .read(habitServiceProvider)
+        .createHabit(name, icon: icon, color: color);
     state = AsyncData([...state.value ?? [], newHabit]);
   }
 

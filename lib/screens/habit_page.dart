@@ -1,10 +1,87 @@
+import 'dart:math';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../providers/app_providers.dart';
 import '../widgets/glass_card.dart';
 import '../theme/glass_theme.dart';
 import '../models/habit.dart';
+
+// ─── Shared helper ───────────────────────────────────────────────
+int calculateStreak(List<DateTime> logs, DateTime today) {
+  if (logs.isEmpty) return 0;
+  final sorted = List<DateTime>.from(logs)..sort((a, b) => b.compareTo(a));
+  int streak = 0;
+  DateTime check = today;
+  if (!sorted.any((d) => d.isAtSameMomentAs(today))) {
+    check = today.subtract(const Duration(days: 1));
+  }
+  while (sorted.any((d) => d.isAtSameMomentAs(check))) {
+    streak++;
+    check = check.subtract(const Duration(days: 1));
+  }
+  return streak;
+}
+
+// ─── Constants ────────────────────────────────────────────────────
+const _kDayAbbr = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+// Predefined icons for the picker
+const _kHabitIcons = <IconData>[
+  Icons.code,
+  Icons.fitness_center,
+  Icons.menu_book,
+  Icons.self_improvement,
+  Icons.water_drop,
+  Icons.bedtime,
+  Icons.directions_run,
+  Icons.music_note,
+  Icons.brush,
+  Icons.restaurant,
+  Icons.pets,
+  Icons.eco,
+];
+
+// Predefined colors for the picker
+const _kHabitColors = <Color>[
+  Color(0xFFFF6B6B),
+  Color(0xFFFF9F43),
+  Color(0xFFFECA57),
+  Color(0xFF48DBFB),
+  Color(0xFF0ABDE3),
+  Color(0xFF5F27CD),
+  Color(0xFFEE5A24),
+  Color(0xFF10AC84),
+  Color(0xFF01A3A4),
+  Color(0xFFC44569),
+  Color(0xFF6C5CE7),
+  Color(0xFF00CECE),
+];
+
+Color _habitColor(Habit habit) {
+  if (habit.color != null && habit.color!.isNotEmpty) {
+    try {
+      return Color(int.parse(habit.color!.replaceAll('#', '0xFF')));
+    } catch (_) {}
+  }
+  return const Color(0xFF48DBFB);
+}
+
+IconData _habitIcon(Habit habit) {
+  if (habit.icon != null && habit.icon!.isNotEmpty) {
+    try {
+      final code = int.parse(habit.icon!);
+      return IconData(code, fontFamily: 'MaterialIcons');
+    } catch (_) {}
+  }
+  return Icons.check_circle_outline;
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  HabitPage
+// ════════════════════════════════════════════════════════════════════
 
 class HabitPage extends ConsumerStatefulWidget {
   const HabitPage({super.key});
@@ -20,10 +97,12 @@ class _HabitPageState extends ConsumerState<HabitPage> {
   Widget build(BuildContext context) {
     final habitsAsync = ref.watch(habitsProvider);
     final logsAsync = ref.watch(habitLogsProvider);
+    final today = DateTime.now();
+    final normalizedToday = DateTime(today.year, today.month, today.day);
 
     return Row(
       children: [
-        // Left: Habit List
+        // ── LEFT: Habit list ──────────────────────────────────
         Expanded(
           flex: 3,
           child: Padding(
@@ -31,53 +110,127 @@ class _HabitPageState extends ConsumerState<HabitPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Title row
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Habit', style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
-                    IconButton(
-                      icon: const Icon(Icons.add, color: Colors.white),
-                      onPressed: () => _showAddHabitDialog(context, ref),
+                    const Text(
+                      'Habit',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(
+                            Icons.grid_view,
+                            color: Colors.white54,
+                            size: 20,
+                          ),
+                          onPressed: () {},
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.add, color: Colors.white),
+                          onPressed: () => _showAddHabitDialog(context, ref),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-                const SizedBox(height: 24),
-                
-                // Header for Grid
-                Row(
-                  children: [
-                    const Expanded(flex: 2, child: SizedBox()), // Name space
-                    Expanded(
-                      flex: 1, 
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceAround,
-                        children: _getLast7Days().map((d) => 
-                          Text(['S','M','T','W','T','F','S'][d.weekday % 7], style: const TextStyle(color: Colors.white38, fontSize: 10))
-                        ).toList(),
-                      ),
-                    )
-                  ],
-                ),
+                const SizedBox(height: 16),
+
+                // ── Date header bar ──────────────────────────
+                _DateHeaderBar(today: normalizedToday),
+
                 const SizedBox(height: 8),
 
+                // ── Date label ──
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.event_note,
+                        color: Colors.white38,
+                        size: 14,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        DateFormat('MMM d').format(today),
+                        style: const TextStyle(
+                          color: Colors.white38,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(
+                        Icons.chevron_right,
+                        color: Colors.white24,
+                        size: 14,
+                      ),
+                    ],
+                  ),
+                ),
+
+                // ── Habit list ───────────────────────────────
                 Expanded(
                   child: habitsAsync.when(
-                    data: (habits) => ListView.builder(
-                      itemCount: habits.length,
-                      itemBuilder: (context, index) {
-                        final habit = habits[index];
-                        final logs = logsAsync.value?[habit.id] ?? [];
-                        return _HabitItem(
-                          habit: habit,
-                          logs: logs,
-                          isSelected: _selectedHabit?.id == habit.id,
-                          onTap: () => setState(() => _selectedHabit = habit),
-                          onToggle: (date) => ref.read(habitToggleProvider)(habit.id, date),
+                    data: (habits) {
+                      if (habits.isEmpty) {
+                        return Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.loop,
+                                color: Colors.white.withValues(alpha: 0.15),
+                                size: 64,
+                              ),
+                              const SizedBox(height: 16),
+                              const Text(
+                                'No habits yet',
+                                style: TextStyle(color: Colors.white38),
+                              ),
+                              const SizedBox(height: 8),
+                              TextButton.icon(
+                                onPressed: () =>
+                                    _showAddHabitDialog(context, ref),
+                                icon: const Icon(Icons.add, size: 16),
+                                label: const Text('Create your first habit'),
+                              ),
+                            ],
+                          ),
                         );
-                      },
-                    ),
+                      }
+                      return ListView.builder(
+                        itemCount: habits.length,
+                        itemBuilder: (context, index) {
+                          final habit = habits[index];
+                          final logs = logsAsync.value?[habit.id] ?? [];
+                          return _HabitItem(
+                            habit: habit,
+                            logs: logs,
+                            today: normalizedToday,
+                            isSelected: _selectedHabit?.id == habit.id,
+                            onTap: () => setState(() => _selectedHabit = habit),
+                            onToggle: () => ref.read(habitToggleProvider)(
+                              habit.id,
+                              normalizedToday,
+                            ),
+                          );
+                        },
+                      );
+                    },
                     loading: () => const Center(child: CircularProgressIndicator()),
-                    error: (e, s) => Text('Error: $e', style: const TextStyle(color: Colors.red)),
+                    error: (e, s) => Center(
+                      child: Text(
+                        'Error: $e',
+                        style: const TextStyle(color: Colors.redAccent),
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -85,7 +238,7 @@ class _HabitPageState extends ConsumerState<HabitPage> {
           ),
         ),
 
-        // Right: Detail Panel
+        // ── RIGHT: Detail panel ──────────────────────────────
         if (_selectedHabit != null) ...[
           const VerticalDivider(width: 1, color: Colors.white10),
           Expanded(
@@ -94,9 +247,11 @@ class _HabitPageState extends ConsumerState<HabitPage> {
               habit: _selectedHabit!,
               logs: logsAsync.value?[_selectedHabit!.id] ?? [],
               onClose: () => setState(() => _selectedHabit = null),
-               onDelete: () {
-                 ref.read(habitsProvider.notifier).deleteHabit(_selectedHabit!.id);
-                 setState(() => _selectedHabit = null);
+              onDelete: () {
+                ref
+                    .read(habitsProvider.notifier)
+                    .deleteHabit(_selectedHabit!.id);
+                setState(() => _selectedHabit = null);
               },
             ),
           ),
@@ -104,48 +259,284 @@ class _HabitPageState extends ConsumerState<HabitPage> {
       ],
     );
   }
-  
-  List<DateTime> _getLast7Days() {
-    final today = DateTime.now();
-    return List.generate(7, (i) => today.subtract(Duration(days: 6 - i)));
-  }
+
+  // ── Dialogs ──────────────────────────────────────────────────
 
   Future<void> _showAddHabitDialog(BuildContext context, WidgetRef ref) async {
-     final controller = TextEditingController();
-     await showDialog(
-       context: context,
-       builder: (context) => AlertDialog(
-         backgroundColor: const Color(0xFF1E1E1E),
-         title: const Text('New Habit', style: TextStyle(color: Colors.white)),
-         content: TextField(
-           controller: controller,
-           style: const TextStyle(color: Colors.white),
-           decoration: const InputDecoration(hintText: 'Habit Name', hintStyle: TextStyle(color: Colors.white54)),
-         ),
-         actions: [
-           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-           TextButton(onPressed: () {
-             if (controller.text.isNotEmpty) {
-                ref.read(habitsProvider.notifier).createHabit(controller.text);
-                Navigator.pop(context);
-             }
-           }, child: const Text('Create')),
-         ],
-       ),
-     );
+    final nameController = TextEditingController();
+    int selectedIconIndex = 0;
+    int selectedColorIndex = 3; // default blue
+    int goalValue = 1;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF1E1E1E),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text('New Habit', style: TextStyle(color: Colors.white)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Name
+                TextField(
+                  controller: nameController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: 'Habit Name',
+                    hintStyle: const TextStyle(color: Colors.white38),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Colors.white12),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: GlassTheme.accentColor),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Icon picker
+                const Text(
+                  'Icon',
+                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: List.generate(_kHabitIcons.length, (i) {
+                    final selected = i == selectedIconIndex;
+                    return GestureDetector(
+                      onTap: () => setDialogState(() => selectedIconIndex = i),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? _kHabitColors[selectedColorIndex].withValues(
+                                  alpha: 0.3,
+                                )
+                              : Colors.white.withValues(alpha: 0.05),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: selected
+                                ? _kHabitColors[selectedColorIndex]
+                                : Colors.transparent,
+                          ),
+                        ),
+                        child: Icon(
+                          _kHabitIcons[i],
+                          color: Colors.white70,
+                          size: 20,
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 20),
+
+                // Color picker
+                const Text(
+                  'Color',
+                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: List.generate(_kHabitColors.length, (i) {
+                    final selected = i == selectedColorIndex;
+                    return GestureDetector(
+                      onTap: () => setDialogState(() => selectedColorIndex = i),
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: _kHabitColors[i],
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: selected ? Colors.white : Colors.transparent,
+                            width: selected ? 2.5 : 0,
+                          ),
+                        ),
+                        child: selected
+                            ? const Icon(
+                                Icons.check,
+                                color: Colors.white,
+                                size: 16,
+                              )
+                            : null,
+                      ),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 20),
+
+                // Goal value
+                const Text(
+                  'Daily Goal',
+                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(
+                        Icons.remove_circle_outline,
+                        color: Colors.white54,
+                      ),
+                      onPressed: goalValue > 1
+                          ? () => setDialogState(() => goalValue--)
+                          : null,
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '$goalValue',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.add_circle_outline,
+                        color: Colors.white54,
+                      ),
+                      onPressed: () => setDialogState(() => goalValue++),
+                    ),
+                    const SizedBox(width: 4),
+                    const Text(
+                      'times / day',
+                      style: TextStyle(color: Colors.white38, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (nameController.text.trim().isNotEmpty) {
+                  final c = _kHabitColors[selectedColorIndex];
+                  final colorHex =
+                      '#${c.toARGB32().toRadixString(16).substring(2)}';
+                  final iconCode = _kHabitIcons[selectedIconIndex].codePoint
+                      .toString();
+                  ref
+                      .read(habitsProvider.notifier)
+                      .createHabit(
+                        nameController.text.trim(),
+                        icon: iconCode,
+                        color: colorHex,
+                      );
+                  Navigator.pop(ctx);
+                }
+              },
+              child: const Text('Create'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
+
+// ════════════════════════════════════════════════════════════════════
+//  Date Header Bar
+// ════════════════════════════════════════════════════════════════════
+
+class _DateHeaderBar extends StatelessWidget {
+  final DateTime today;
+  const _DateHeaderBar({required this.today});
+
+  @override
+  Widget build(BuildContext context) {
+    final days = List.generate(7, (i) => today.subtract(Duration(days: 6 - i)));
+
+    return Row(
+      children: days.map((d) {
+        final isToday = d.isAtSameMomentAs(today);
+        final dayLabel = _kDayAbbr[d.weekday - 1]; // 1=Mon ... 7=Sun
+
+        return Expanded(
+          child: Column(
+            children: [
+              Text(
+                dayLabel,
+                style: TextStyle(
+                  color: isToday ? Colors.white : Colors.white38,
+                  fontSize: 11,
+                  fontWeight: isToday ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isToday ? GlassTheme.accentColor : Colors.transparent,
+                ),
+                child: Center(
+                  child: Text(
+                    '${d.day}',
+                    style: TextStyle(
+                      color: isToday ? Colors.white : Colors.white54,
+                      fontSize: 13,
+                      fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Habit List Item
+// ════════════════════════════════════════════════════════════════════
 
 class _HabitItem extends StatelessWidget {
   final Habit habit;
   final List<DateTime> logs;
+  final DateTime today;
   final bool isSelected;
   final VoidCallback onTap;
-  final Function(DateTime) onToggle;
+  final VoidCallback onToggle;
 
   const _HabitItem({
     required this.habit,
     required this.logs,
+    required this.today,
     required this.isSelected,
     required this.onTap,
     required this.onToggle,
@@ -153,65 +544,107 @@ class _HabitItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
-    final streak = _calculateStreak(logs, today);
+    final streak = calculateStreak(logs, today);
+    final totalDays = logs.length;
+    final completedToday = logs.any((d) => d.isAtSameMomentAs(today));
+    final color = _habitColor(habit);
+    final icon = _habitIcon(habit);
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: isSelected ? GlassTheme.accentColor.withValues(alpha: 0.1) : Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: isSelected ? GlassTheme.accentColor.withValues(alpha: 0.3) : Colors.transparent),
+          color: isSelected
+              ? GlassTheme.accentColor.withValues(alpha: 0.1)
+              : Colors.white.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected
+                ? GlassTheme.accentColor.withValues(alpha: 0.3)
+                : Colors.white.withValues(alpha: 0.06),
+          ),
         ),
         child: Row(
           children: [
-            // Icon
+            // ── Colored icon ──
             Container(
-              padding: const EdgeInsets.all(8),
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
-                color: (habit.color != null ? Color(int.parse(habit.color!.replaceAll('#','0xFF'))) : Colors.blue).withValues(alpha: 0.2),
+                color: color.withValues(alpha: 0.2),
                 shape: BoxShape.circle,
               ),
-              child: Icon(Icons.check_circle_outline, color: habit.color != null ? Color(int.parse(habit.color!.replaceAll('#','0xFF'))) : Colors.blue, size: 20),
+              child: Icon(icon, color: color, size: 20),
             ),
-            const SizedBox(width: 12),
-            
-            // Name & Streak
+            const SizedBox(width: 14),
+
+            // ── Name + stats ──
             Expanded(
-              flex: 2,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(habit.name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                  Text('$streak Day Streak', style: const TextStyle(color: Colors.white38, fontSize: 11)),
+                  Text(
+                    habit.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      // Total days
+                      const Icon(Icons.tag, color: Colors.white30, size: 12),
+                      const SizedBox(width: 2),
+                      Text(
+                        '$totalDays Days',
+                        style: const TextStyle(
+                          color: Colors.white38,
+                          fontSize: 11,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      // Streak
+                      const Text('🔥', style: TextStyle(fontSize: 11)),
+                      const SizedBox(width: 2),
+                      Text(
+                        '$streak Day',
+                        style: const TextStyle(
+                          color: Colors.white38,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
 
-            // Last 7 Days Grid
-            Expanded(
-              flex: 1,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: List.generate(7, (i) {
-                  final d = DateTime.now().subtract(Duration(days: 6 - i));
-                  final normalized = DateTime(d.year, d.month, d.day);
-                  final isDone = logs.any((log) => log.isAtSameMomentAs(normalized));
-                  
-                  return GestureDetector(
-                    onTap: () => onToggle(normalized),
-                    child: Container(
-                      width: 12, height: 12,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: isDone ? Colors.white : Colors.white10,
-                      ),
-                    ),
-                  );
-                }),
+            // ── Today checkmark ──
+            GestureDetector(
+              onTap: onToggle,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: completedToday
+                      ? GlassTheme.accentColor
+                      : Colors.transparent,
+                  border: Border.all(
+                    color: completedToday
+                        ? GlassTheme.accentColor
+                        : Colors.white24,
+                    width: 2,
+                  ),
+                ),
+                child: completedToday
+                    ? const Icon(Icons.check, color: Colors.white, size: 20)
+                    : null,
               ),
             ),
           ],
@@ -219,134 +652,407 @@ class _HabitItem extends StatelessWidget {
       ),
     );
   }
-
-  int _calculateStreak(List<DateTime> logs, DateTime today) {
-    // Simple streak logic
-    if (logs.isEmpty) return 0;
-    // Create a copy and sort descending
-    final sortedLogs = List<DateTime>.from(logs)..sort((a, b) => b.compareTo(a));
-    
-    int streak = 0;
-    DateTime check = today;
-    
-    // If not completed today, check if completed yesterday to maintain streak
-    if (!sortedLogs.any((d) => d.isAtSameMomentAs(today))) {
-      check = today.subtract(const Duration(days: 1));
-    }
-
-    while (sortedLogs.any((d) => d.isAtSameMomentAs(check))) {
-      streak++;
-      check = check.subtract(const Duration(days: 1));
-    }
-    return streak;
-  }
 }
 
-class _HabitDetailPanel extends StatelessWidget {
+// ════════════════════════════════════════════════════════════════════
+//  Detail Panel
+// ════════════════════════════════════════════════════════════════════
+
+class _HabitDetailPanel extends StatefulWidget {
   final Habit habit;
   final List<DateTime> logs;
   final VoidCallback onClose;
   final VoidCallback onDelete;
 
-  const _HabitDetailPanel({required this.habit, required this.logs, required this.onClose, required this.onDelete});
+  const _HabitDetailPanel({
+    required this.habit,
+    required this.logs,
+    required this.onClose,
+    required this.onDelete,
+  });
+
+  @override
+  State<_HabitDetailPanel> createState() => _HabitDetailPanelState();
+}
+
+class _HabitDetailPanelState extends State<_HabitDetailPanel> {
+  late DateTime _focusedMonth;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusedMonth = DateTime.now();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final totalCheckIns = logs.length;
-    final currentMonth = DateTime.now();
-    final monthlyCheckIns = logs.where((d) => d.month == currentMonth.month && d.year == currentMonth.year).length;
+    final today = DateTime(
+      DateTime.now().year,
+      DateTime.now().month,
+      DateTime.now().day,
+    );
+    final color = _habitColor(widget.habit);
+    final icon = _habitIcon(widget.habit);
+
+    // ── Stats ──
+    final totalCheckIns = widget.logs.length;
+    final monthlyCheckIns = widget.logs
+        .where(
+          (d) => d.month == _focusedMonth.month && d.year == _focusedMonth.year,
+        )
+        .length;
+    final daysInMonth = DateUtils.getDaysInMonth(
+      _focusedMonth.year,
+      _focusedMonth.month,
+    );
+    final checkInRate = daysInMonth > 0
+        ? (monthlyCheckIns / daysInMonth * 100).round()
+        : 0;
+    final streak = calculateStreak(widget.logs, today);
 
     return Container(
-      color: const Color(0xFF161616),
+      color: const Color(0xFF141414),
       child: Column(
         children: [
-          // Header
+          // ── Header ──
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             child: Row(
               children: [
-                IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: onClose),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white54),
+                  onPressed: widget.onClose,
+                ),
                 const Spacer(),
-                IconButton(icon: const Icon(Icons.delete, color: Colors.white54), onPressed: onDelete),
+                IconButton(
+                  icon: const Icon(Icons.more_horiz, color: Colors.white54),
+                  onPressed: () {
+                    // Could show edit/delete menu
+                    showMenu(
+                      context: context,
+                      position: const RelativeRect.fromLTRB(1000, 80, 16, 0),
+                      color: const Color(0xFF1E1E1E),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      items: [
+                        PopupMenuItem(
+                          onTap: widget.onDelete,
+                          child: const Row(
+                            children: [
+                              Icon(
+                                Icons.delete_outline,
+                                color: Colors.redAccent,
+                                size: 18,
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                'Delete',
+                                style: TextStyle(color: Colors.redAccent),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
               ],
             ),
           ),
-          
+
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // ── Habit name + icon ──
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.2), shape: BoxShape.circle),
-                        child: const Icon(Icons.check, color: Colors.blue, size: 32),
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(icon, color: color, size: 28),
                       ),
                       const SizedBox(width: 16),
-                      Text(habit.name, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                      Expanded(
+                        child: Text(
+                          widget.habit.name,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 28),
 
-                  // Stats Grid
+                  // ── Stats grid (3 × 2) ──
                   Row(
                     children: [
-                      Expanded(child: _StatCard(label: "Monthly check-ins", value: "$monthlyCheckIns", sub: "Day")),
-                      const SizedBox(width: 12),
-                      Expanded(child: _StatCard(label: "Total Check-Ins", value: "$totalCheckIns", sub: "Days")),
+                      Expanded(
+                        child: _StatCard(
+                          icon: Icons.check_circle,
+                          iconColor: Colors.greenAccent,
+                          label: 'Monthly check-ins',
+                          value: '$monthlyCheckIns',
+                          sub: 'Day',
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _StatCard(
+                          icon: Icons.check_circle,
+                          iconColor: Colors.greenAccent,
+                          label: 'Total Check-Ins',
+                          value: '$totalCheckIns',
+                          sub: 'Days',
+                        ),
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                   Row(
+                  const SizedBox(height: 10),
+                  Row(
                     children: [
-                      Expanded(child: _StatCard(label: "Monthly completion", value: "$monthlyCheckIns", sub: "Count")),
-                      const SizedBox(width: 12),
-                      Expanded(child: _StatCard(label: "Current Streak", value: "TODO", sub: "Day")),
+                      Expanded(
+                        child: _StatCard(
+                          icon: Icons.pie_chart,
+                          iconColor: Colors.orangeAccent,
+                          label: 'Monthly check-in rate',
+                          value: '$checkInRate',
+                          sub: '%',
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _StatCard(
+                          icon: Icons.local_fire_department,
+                          iconColor: Colors.redAccent,
+                          label: 'Current Streak',
+                          value: '$streak',
+                          sub: 'Day',
+                        ),
+                      ),
                     ],
                   ),
-                  
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _StatCard(
+                          icon: Icons.bar_chart,
+                          iconColor: Colors.blueAccent,
+                          label: 'Monthly completion',
+                          value: '$monthlyCheckIns',
+                          sub: 'Count',
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _StatCard(
+                          icon: Icons.bar_chart,
+                          iconColor: Colors.purpleAccent,
+                          label: 'Total completion',
+                          value: '$totalCheckIns',
+                          sub: 'Count',
+                        ),
+                      ),
+                    ],
+                  ),
+
                   const SizedBox(height: 32),
-                  
-                  // Calendar
-                  const Text("February 2026", style: TextStyle(color: Colors.white, fontSize: 16)),
-                  const SizedBox(height: 16),
+
+                  // ── Calendar header with navigation ──
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(
+                          Icons.chevron_left,
+                          color: Colors.white54,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _focusedMonth = DateTime(
+                              _focusedMonth.year,
+                              _focusedMonth.month - 1,
+                            );
+                          });
+                        },
+                      ),
+                      Expanded(
+                        child: Center(
+                          child: Text(
+                            DateFormat('MMMM yyyy').format(_focusedMonth),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(
+                          Icons.chevron_right,
+                          color: Colors.white54,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _focusedMonth = DateTime(
+                              _focusedMonth.year,
+                              _focusedMonth.month + 1,
+                            );
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  // ── Calendar ──
                   GlassCard(
                     padding: const EdgeInsets.all(8),
                     child: TableCalendar(
                       firstDay: DateTime(2020),
                       lastDay: DateTime(2030),
-                      focusedDay: DateTime.now(),
+                      focusedDay: _focusedMonth,
                       calendarFormat: CalendarFormat.month,
                       headerVisible: false,
-                      daysOfWeekStyle: const DaysOfWeekStyle(weekdayStyle: TextStyle(color: Colors.white38), weekendStyle: TextStyle(color: Colors.white38)),
+                      daysOfWeekStyle: const DaysOfWeekStyle(
+                        weekdayStyle: TextStyle(
+                          color: Colors.white38,
+                          fontSize: 12,
+                        ),
+                        weekendStyle: TextStyle(
+                          color: Colors.white38,
+                          fontSize: 12,
+                        ),
+                      ),
                       calendarStyle: const CalendarStyle(
                         defaultTextStyle: TextStyle(color: Colors.white),
                         weekendTextStyle: TextStyle(color: Colors.white),
                         outsideTextStyle: TextStyle(color: Colors.white10),
-                        todayDecoration: BoxDecoration(color: Colors.transparent, shape: BoxShape.circle), // Handle manually
+                        todayDecoration: BoxDecoration(
+                          color: Colors.transparent,
+                          shape: BoxShape.circle,
+                        ),
                         selectedDecoration: BoxDecoration(color: Colors.transparent),
                       ),
                       calendarBuilders: CalendarBuilders(
-                         defaultBuilder: (context, day, focusedDay) {
-                           final normalized = DateTime(day.year, day.month, day.day);
-                           final isDone = logs.any((d) => d.isAtSameMomentAs(normalized));
-                           return Center(
-                             child: Container(
-                                width: 32, height: 32,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: isDone ? Colors.white24 : Colors.transparent,
+                        defaultBuilder: (context, day, focusedDay) {
+                          final normalized = DateTime(
+                            day.year,
+                            day.month,
+                            day.day,
+                          );
+                          final isDone = widget.logs.any(
+                            (d) => d.isAtSameMomentAs(normalized),
+                          );
+                          return Center(
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isDone
+                                    ? color.withValues(alpha: 0.3)
+                                    : Colors.transparent,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '${day.day}',
+                                  style: TextStyle(
+                                    color: isDone
+                                        ? Colors.white
+                                        : Colors.white38,
+                                    fontWeight: isDone
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                  ),
                                 ),
-                                child: Center(child: Text('${day.day}', style: TextStyle(color: isDone ? Colors.white : Colors.white38))),
-                             ),
-                           );
-                         },
+                              ),
+                            ),
+                          );
+                        },
+                        todayBuilder: (context, day, focusedDay) {
+                          final normalized = DateTime(
+                            day.year,
+                            day.month,
+                            day.day,
+                          );
+                          final isDone = widget.logs.any(
+                            (d) => d.isAtSameMomentAs(normalized),
+                          );
+                          return Center(
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isDone
+                                    ? color.withValues(alpha: 0.4)
+                                    : Colors.transparent,
+                                border: Border.all(
+                                  color: isDone
+                                      ? color
+                                      : GlassTheme.accentColor,
+                                  width: 2,
+                                ),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '${day.day}',
+                                  style: TextStyle(
+                                    color: isDone
+                                        ? Colors.white
+                                        : GlassTheme.accentColor,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ),
+
+                  const SizedBox(height: 28),
+
+                  // ── Daily Goals bar chart ──
+                  const Text(
+                    'Daily Goals',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    '(Count)',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.3),
+                      fontSize: 11,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 120,
+                    child: _DailyGoalsChart(
+                      logs: widget.logs,
+                      month: _focusedMonth,
+                      color: color,
+                      goalValue: widget.habit.goalValue,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
                 ],
               ),
             ),
@@ -357,31 +1063,214 @@ class _HabitDetailPanel extends StatelessWidget {
   }
 }
 
+// ════════════════════════════════════════════════════════════════════
+//  Stat Card
+// ════════════════════════════════════════════════════════════════════
+
 class _StatCard extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
   final String label, value, sub;
-  const _StatCard({required this.label, required this.value, required this.sub});
+
+  const _StatCard({
+    required this.icon,
+    required this.iconColor,
+    required this.label,
+    required this.value,
+    required this.sub,
+  });
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(12)),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-           Row(children: [
-             const Icon(Icons.check_circle, size: 14, color: Colors.greenAccent),
-             const SizedBox(width: 6),
-             Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11)),
-           ]),
-           const SizedBox(height: 8),
-           RichText(text: TextSpan(
-             children: [
-               TextSpan(text: value, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-               TextSpan(text: " $sub", style: const TextStyle(color: Colors.white38, fontSize: 12)),
-             ]
-           )),
+          Row(
+            children: [
+              Icon(icon, size: 13, color: iconColor),
+              const SizedBox(width: 5),
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(color: Colors.white54, fontSize: 10),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          RichText(
+            text: TextSpan(
+              children: [
+                TextSpan(
+                  text: value,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                TextSpan(
+                  text: ' $sub',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.35),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
+}
+
+// ════════════════════════════════════════════════════════════════════
+//  Daily Goals Bar Chart (CustomPaint – zero deps)
+// ════════════════════════════════════════════════════════════════════
+
+class _DailyGoalsChart extends StatelessWidget {
+  final List<DateTime> logs;
+  final DateTime month;
+  final Color color;
+  final int goalValue;
+
+  const _DailyGoalsChart({
+    required this.logs,
+    required this.month,
+    required this.color,
+    required this.goalValue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final daysInMonth = DateUtils.getDaysInMonth(month.year, month.month);
+
+    // Count completions per day of month
+    final Map<int, int> dayCount = {};
+    for (final d in logs) {
+      if (d.year == month.year && d.month == month.month) {
+        dayCount[d.day] = (dayCount[d.day] ?? 0) + 1;
+      }
+    }
+
+    // Find max for Y scale
+    final maxVal = dayCount.values.fold(goalValue, max);
+
+    return CustomPaint(
+      size: const Size(double.infinity, 120),
+      painter: _BarChartPainter(
+        daysInMonth: daysInMonth,
+        dayCount: dayCount,
+        maxVal: maxVal,
+        barColor: color,
+        goalValue: goalValue,
+      ),
+    );
+  }
+}
+
+class _BarChartPainter extends CustomPainter {
+  final int daysInMonth;
+  final Map<int, int> dayCount;
+  final int maxVal;
+  final Color barColor;
+  final int goalValue;
+
+  _BarChartPainter({
+    required this.daysInMonth,
+    required this.dayCount,
+    required this.maxVal,
+    required this.barColor,
+    required this.goalValue,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final bottomPadding = 18.0;
+    final topPadding = 8.0;
+    final chartHeight = size.height - bottomPadding - topPadding;
+    final barWidth = (size.width / daysInMonth) * 0.6;
+    final gap = (size.width / daysInMonth) * 0.4;
+    final totalBarSlot = barWidth + gap;
+
+    final barPaint = Paint()..color = barColor;
+    final emptyPaint = Paint()..color = Colors.white.withValues(alpha: 0.06);
+    final textStyle = TextStyle(
+      color: Colors.white.withValues(alpha: 0.35),
+      fontSize: 8,
+    );
+
+    // Draw Y-axis labels
+    for (int y = 0; y <= maxVal; y++) {
+      final yPos = topPadding + chartHeight - (y / maxVal * chartHeight);
+      // Only draw a few labels & lines
+      if (y == 0 || y == maxVal || y == (maxVal / 2).round()) {
+        // Draw dashed line
+        final linePaint = Paint()
+          ..color = Colors.white.withValues(alpha: 0.06)
+          ..strokeWidth = 0.5;
+        canvas.drawLine(Offset(0, yPos), Offset(size.width, yPos), linePaint);
+      }
+    }
+
+    // Draw bars
+    for (int day = 1; day <= daysInMonth; day++) {
+      final count = dayCount[day] ?? 0;
+      final x = (day - 1) * totalBarSlot + gap / 2;
+      final barHeight = maxVal > 0 ? (count / maxVal) * chartHeight : 0.0;
+
+      // Empty bar background
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(x, topPadding, barWidth, chartHeight),
+          const Radius.circular(2),
+        ),
+        emptyPaint,
+      );
+
+      // Filled bar
+      if (barHeight > 0) {
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(
+              x,
+              topPadding + chartHeight - barHeight,
+              barWidth,
+              barHeight,
+            ),
+            const Radius.circular(2),
+          ),
+          barPaint,
+        );
+      }
+
+      // Day label (every few days to avoid clutter)
+      if (day == 1 || day % 5 == 0 || day == daysInMonth) {
+        final tp = TextPainter(
+          text: TextSpan(text: '$day', style: textStyle),
+          textDirection: ui.TextDirection.ltr,
+        )..layout();
+        tp.paint(
+          canvas,
+          Offset(
+            x + barWidth / 2 - tp.width / 2,
+            size.height - bottomPadding + 4,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _BarChartPainter old) =>
+      old.dayCount != dayCount || old.daysInMonth != daysInMonth;
 }
