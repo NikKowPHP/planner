@@ -60,17 +60,29 @@ class _TaskDetailPanelState extends State<TaskDetailPanel> {
   }
 
   void _handleUpdate({String? title, String? description, int? priority, bool? isCompleted, DateTime? dueDate}) {
-    final updatedTask = Task(
-      id: widget.task.id,
-      userId: widget.task.userId,
-      listId: widget.task.listId,
-      title: title ?? widget.task.title,
-      description: description ?? widget.task.description,
-      dueDate: dueDate ?? widget.task.dueDate,
-      priority: priority ?? widget.task.priority,
-      isCompleted: isCompleted ?? widget.task.isCompleted,
-    );
-    widget.onUpdate(updatedTask);
+    final logger = FileLogger();
+    logger.log('TASK_DETAIL: User modifying fields for task ${widget.task.id}');
+
+    try {
+      final updatedTask = Task(
+        id: widget.task.id,
+        userId: widget.task.userId,
+        listId: widget.task.listId,
+        title: title ?? widget.task.title,
+        description: description ?? widget.task.description,
+        dueDate: dueDate ?? widget.task.dueDate,
+        priority: priority ?? widget.task.priority,
+        isCompleted: isCompleted ?? widget.task.isCompleted,
+      );
+      widget.onUpdate(updatedTask);
+      logger.log('TASK_DETAIL: Update request sent for ${widget.task.id}');
+    } catch (e, s) {
+      logger.error(
+        'TASK_DETAIL: Failed to package update for ${widget.task.id}',
+        e,
+        s,
+      );
+    }
   }
 
   void _handleListChange(String? newListId) {

@@ -4,7 +4,9 @@ import '../../providers/app_providers.dart';
 import '../../theme/glass_theme.dart';
 
 class HomeAppBar extends ConsumerWidget {
-  const HomeAppBar({super.key});
+  final VoidCallback? onMenuPressed; // Add this
+
+  const HomeAppBar({super.key, this.onMenuPressed});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -16,8 +18,12 @@ class HomeAppBar extends ConsumerWidget {
       children: [
         Row(
           children: [
-            const Icon(Icons.menu, color: Colors.white, size: 28),
-            const SizedBox(width: 16),
+            IconButton(
+              // Make clickable
+              icon: const Icon(Icons.menu, color: Colors.white, size: 28),
+              onPressed: onMenuPressed,
+            ),
+            const SizedBox(width: 8),
             Text(
               title,
               style: const TextStyle(

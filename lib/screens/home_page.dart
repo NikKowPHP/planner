@@ -18,6 +18,7 @@ import '../widgets/glass_rail.dart';
 import 'focus_page.dart';
 import '../widgets/calendar/glass_calendar.dart';
 import 'habit_page.dart';
+import '../models/task_list.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -29,6 +30,8 @@ class HomePage extends ConsumerStatefulWidget {
 class _HomePageState extends ConsumerState<HomePage> {
   final TextEditingController _taskController = TextEditingController();
   final FileLogger _logger = FileLogger();
+  final GlobalKey<ScaffoldState> _scaffoldKey =
+      GlobalKey<ScaffoldState>(); // Add Key
 
   @override
   Widget build(BuildContext context) {
@@ -51,76 +54,90 @@ class _HomePageState extends ConsumerState<HomePage> {
     final tags = tagsAsync.value ?? [];
     final filters = filtersAsync.value ?? [];
 
+    // Reusable Sidebar Widget
+    final sidebar = GlassSidebar(
+      selectedIndex: selectedIndex,
+      userLists: lists,
+      tags: tags.map((t) => t.name).toList(),
+      customFilters: filters,
+      onAddList: () => _createList(context, ref),
+      onAddTag: () => _createTag(context, ref),
+      onAddFilter: () => _createFilter(context, ref),
+      onEditFilter: (f) => _editFilter(context, ref, f),
+      onDeleteFilter: (f) => _safeAction(() async {
+        await ref.read(todoServiceProvider).deleteFilter(f.id);
+        ref.invalidate(filtersProvider);
+      }, 'Delete Filter'),
+      onItemSelected: (index) {
+        notifier.setIndex(index);
+        if (!isDesktop) Navigator.pop(context); // Close drawer on mobile
+      },
+    );
+
     return Scaffold(
+      key: _scaffoldKey, // Attach Key
       extendBody: true,
+      // Only show Drawer on mobile and when on Tasks tab
+      drawer: (!isDesktop && activeTab == AppTab.tasks)
+          ? Drawer(
+              backgroundColor: const Color(0xFF0F0F0F),
+              width: 280,
+              child: sidebar,
+            )
+          : null,
       body: Stack(
         children: [
           const LiquidBackground(),
           if (isDesktop)
             Row(
               children: [
-                // 1. Main Navigation Rail (Always Visible)
+                // 1. Main Navigation Rail
                 GlassRail(
                   activeTab: activeTab,
                   onTabSelected: notifier.setActiveTab,
                 ),
 
-                // 2. Context Sidebar (Only visible for Tasks)
+                // 2. Context Sidebar (Tasks only)
                 if (activeTab == AppTab.tasks)
-                  GlassSidebar(
-                    selectedIndex: selectedIndex,
-                    userLists: lists,
-                    tags: tags.map((t) => t.name).toList(),
-                    customFilters: filters,
-                    onAddList: () => _createList(context, ref),
-                    onAddTag: () => _createTag(context, ref),
-                    onAddFilter: () => _createFilter(context, ref),
-                    onEditFilter: (f) => _editFilter(context, ref, f),
-                    onDeleteFilter: (f) => _safeAction(() async {
-                       await ref.read(todoServiceProvider).deleteFilter(f.id);
-                       ref.invalidate(filtersProvider);
-                    }, 'Delete Filter'),
-                    onItemSelected: notifier.setIndex,
-                  ),
+                  sidebar, // Use the reusable sidebar instance
 
-                // 3. Main Content Area
+                // 3. Main Content
                 Expanded(
                   child: _buildBodyContent(activeTab, ref),
                 ),
 
-                // 4. Detail Panel (Right Sidebar)
+                // 4. Detail Panel
                 if (activeTab == AppTab.tasks && selectedTask != null) ...[
                   const VerticalDivider(width: 1, color: Colors.white10),
                   SizedBox(
                     width: 400,
-                    child: TaskDetailPanel(
-                      task: selectedTask,
-                      onClose: () => notifier.selectTask(null),
-                      onUpdate: (t) => _safeAction(() => tasksNotifier.updateTask(t), 'Update Task'),
-                      onDelete: (t) {
-                         notifier.selectTask(null);
-                         _safeAction(() => tasksNotifier.deleteTask(t), 'Delete Task');
-                      },
-                      userLists: lists,
+                    child: _buildDetailPanel(
+                      selectedTask,
+                      notifier,
+                      tasksNotifier,
+                      lists,
                     ),
                   ),
                 ],
               ],
             )
           else
-            // Mobile Layout (Bottom Nav instead of Rail, simplified)
+            // Mobile Layout
             Stack(
               children: [
                 SafeArea(
                   bottom: false,
-                  child: ResponsiveLayout(child: _buildBodyContent(activeTab, ref)),
+                  // Add bottom padding to content to avoid overlapping nav bar
+                  child: _buildBodyContent(activeTab, ref),
                 ),
-                // Simplified Mobile Nav - in real app, bottom nav would switch tabs
                 GlassNavigationBar(
-                  selectedIndex: activeTab == AppTab.tasks ? selectedIndex : 99,
-                  onItemSelected: (i) {
-                     notifier.setActiveTab(AppTab.tasks);
-                     notifier.setIndex(i);
+                  currentTab: activeTab,
+                  onTabSelected: (tab) {
+                    notifier.setActiveTab(tab);
+                    // If switching to Tasks, ensure a valid index is set if needed
+                    if (tab == AppTab.tasks && selectedIndex < 0) {
+                      notifier.setIndex(0);
+                    }
                   },
                 ),
               ],
@@ -128,24 +145,48 @@ class _HomePageState extends ConsumerState<HomePage> {
         ],
       ),
     );
-}
+  }
 
-  // Switch content based on Active Tab
+  Widget _buildDetailPanel(
+    Task selectedTask,
+    dynamic notifier,
+    dynamic tasksNotifier,
+    List<TaskList> lists,
+  ) {
+    return TaskDetailPanel(
+      task: selectedTask,
+      onClose: () => notifier.selectTask(null),
+      onUpdate: (t) =>
+          _safeAction(() => tasksNotifier.updateTask(t), 'Update Task'),
+      onDelete: (t) {
+        notifier.selectTask(null);
+        _safeAction(() => tasksNotifier.deleteTask(t), 'Delete Task');
+      },
+      userLists: lists,
+    );
+  }
+
   Widget _buildBodyContent(AppTab activeTab, WidgetRef ref) {
+    final isMobile = ResponsiveLayout.isMobile(context);
+    
     switch (activeTab) {
       case AppTab.calendar:
         return Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: EdgeInsets.fromLTRB(24, 24, 24, isMobile ? 100 : 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-               const HomeAppBar(),
+              const HomeAppBar(), // No drawer menu on calendar
                const SizedBox(height: 24),
                Expanded(
                  child: GlassCalendar(
                     onTaskTap: (task) {
                       ref.read(homeViewProvider.notifier).selectTask(task);
-                      ref.read(homeViewProvider.notifier).setActiveTab(AppTab.tasks); // Switch to tasks to show details
+                    // On mobile, maybe show sheet, on desktop switch tab?
+                    // For simplicity, switch tab to tasks to view context
+                    ref
+                        .read(homeViewProvider.notifier)
+                        .setActiveTab(AppTab.tasks);
                     },
                  ),
                ),
@@ -161,16 +202,21 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
   }
 
-  // Existing Main Content Logic renamed to _buildTaskContent
   Widget _buildTaskContent(WidgetRef ref) {
     final groupedTasks = ref.watch(groupedTasksProvider);
+    final isMobile = ResponsiveLayout.isMobile(context);
 
     return Padding(
-      padding: const EdgeInsets.all(24.0),
+      padding: EdgeInsets.fromLTRB(24, 24, 24, isMobile ? 100 : 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const HomeAppBar(),
+          HomeAppBar(
+            // Only enable drawer menu on Mobile + Tasks tab
+            onMenuPressed: isMobile
+                ? () => _scaffoldKey.currentState?.openDrawer()
+                : null,
+          ),
           const SizedBox(height: 24),
           GlassCard(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -200,7 +246,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                  await ref.read(tasksProvider.future);
               },
               child: ListView.builder(
-                padding: const EdgeInsets.only(bottom: 80),
+                padding: EdgeInsets.zero,
                 itemCount: groupedTasks.length,
                 itemBuilder: (context, index) {
                   final groupName = groupedTasks.keys.elementAt(index);
@@ -221,7 +267,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       },
                       onTaskTap: (task) {
                         ref.read(homeViewProvider.notifier).selectTask(task);
-                        if (!ResponsiveLayout.isDesktop(context)) {
+                        if (isMobile) {
                           _showMobileDetailSheet(context, ref, task);
                         }
                       },
@@ -476,12 +522,26 @@ class _HomePageState extends ConsumerState<HomePage> {
               final u = Task(id: task.id, userId: task.userId, listId: task.listId, title: task.title, isCompleted: task.isCompleted, priority: task.priority, tagIds: task.tagIds, isPinned: task.isPinned, dueDate: d);
               _safeAction(() => notifier.updateTask(u), 'Context: Update Date');
            },
-           onPrioritySelect: (p) {
-               final u = Task(id: task.id, userId: task.userId, listId: task.listId, title: task.title, isCompleted: task.isCompleted, priority: p, tagIds: task.tagIds, isPinned: task.isPinned, dueDate: task.dueDate);
+        onPrioritySelect: (p) async {
+          await _logger.log(
+            'UI_CONTEXT: User selected priority $p for task ${task.id}',
+          );
+          final u = Task(
+            id: task.id,
+            userId: task.userId,
+            listId: task.listId,
+            title: task.title,
+            isCompleted: task.isCompleted,
+            priority: p,
+            tagIds: task.tagIds,
+            isPinned: task.isPinned,
+            dueDate: task.dueDate,
+          );
               _safeAction(() => notifier.updateTask(u), 'Context: Priority');
            },
-           onPin: () {
+        onPin: () async {
                Navigator.pop(context);
+          await _logger.log('UI_CONTEXT: User toggled pin for task ${task.id}');
                final u = Task(id: task.id, userId: task.userId, listId: task.listId, title: task.title, isCompleted: task.isCompleted, priority: task.priority, tagIds: task.tagIds, isPinned: !task.isPinned, dueDate: task.dueDate);
               _safeAction(() => notifier.updateTask(u), 'Context: Pin');
            },

@@ -55,9 +55,11 @@ class HabitService {
   }
 
   Future<void> toggleHabitForDate(String habitId, DateTime date) async {
+    final dateStr = date.toIso8601String().split('T')[0];
+    await _logger.log(
+      'HABIT_SERVICE: Toggle remote log for $habitId on $dateStr',
+    );
     try {
-      final dateStr = date.toIso8601String().split('T')[0]; // YYYY-MM-DD
-      
       // Check existence
       final existing = await _supabase
           .from('habit_logs')
@@ -67,10 +69,12 @@ class HabitService {
           .maybeSingle();
 
       if (existing != null) {
-        // Delete (Uncheck)
+        await _logger.log(
+          'HABIT_SERVICE: Removing existing log ${existing['id']}',
+        );
         await _supabase.from('habit_logs').delete().eq('id', existing['id']);
       } else {
-        // Insert (Check)
+        await _logger.log('HABIT_SERVICE: Inserting new log');
         await _supabase.from('habit_logs').insert({
           'habit_id': habitId,
           'completed_at': dateStr,
@@ -78,7 +82,7 @@ class HabitService {
         });
       }
     } catch (e, s) {
-      await _logger.error('HabitService: Toggle failed', e, s);
+      await _logger.error('HABIT_SERVICE: Toggle transaction failed', e, s);
       rethrow;
     }
   }

@@ -47,8 +47,11 @@ class TasksNotifier extends AsyncNotifier<List<Task>> {
 
   Future<void> updateTask(Task task) async {
     final logger = ref.read(loggerProvider);
+    await logger.log(
+      'CRUD: Starting update for Task(id: ${task.id}, title: ${task.title})',
+    );
     try {
-      // Optimistic
+      // Optimistic update
       final current = state.value ?? [];
       final index = current.indexWhere((t) => t.id == task.id);
       if (index != -1) {
@@ -58,10 +61,12 @@ class TasksNotifier extends AsyncNotifier<List<Task>> {
       }
       
       await ref.read(todoServiceProvider).updateTask(task);
-      await logger.log('TasksProvider: Updated task ${task.id}');
+      await logger.log(
+        'CRUD: Successfully updated Task ${task.id} in database',
+      );
     } catch (e, s) {
-      await logger.error('TasksProvider: Update failed', e, s);
-      // Revert logic could go here
+      await logger.error('CRUD: Failed to update Task ${task.id}', e, s);
+      ref.invalidateSelf(); // Rollback state on failure
       rethrow;
     }
   }
@@ -151,8 +156,15 @@ class HomeViewNotifier extends Notifier<HomeViewState> {
   @override
   HomeViewState build() => HomeViewState();
 
-  void setActiveTab(AppTab tab) => state = state.copyWith(activeTab: tab);
-  void setIndex(int index) => state = state.copyWith(selectedIndex: index);
+  void setActiveTab(AppTab tab) {
+    ref.read(loggerProvider).log('UI_STATE: Changing Active Tab to $tab');
+    state = state.copyWith(activeTab: tab);
+  }
+
+  void setIndex(int index) {
+    ref.read(loggerProvider).log('UI_STATE: Changing Sidebar Index to $index');
+    state = state.copyWith(selectedIndex: index);
+  }
   void setGroupBy(GroupBy group) => state = state.copyWith(groupBy: group);
   void setSortBy(SortBy sort) => state = state.copyWith(sortBy: sort);
   void toggleHideCompleted() => state = state.copyWith(hideCompleted: !state.hideCompleted);
@@ -375,10 +387,18 @@ class HabitsNotifier extends AsyncNotifier<List<Habit>> {
   }
 
   Future<void> createHabit(String name, {String? icon, String? color}) async {
-    final newHabit = await ref
-        .read(habitServiceProvider)
-        .createHabit(name, icon: icon, color: color);
-    state = AsyncData([...state.value ?? [], newHabit]);
+    final logger = ref.read(loggerProvider);
+    await logger.log('CRUD: Attempting to create Habit: $name');
+    try {
+      final newHabit = await ref
+          .read(habitServiceProvider)
+          .createHabit(name, icon: icon, color: color);
+      state = AsyncData([...state.value ?? [], newHabit]);
+      await logger.log('CRUD: Successfully created Habit ${newHabit.id}');
+    } catch (e, s) {
+      await logger.error('CRUD: Habit creation failed for $name', e, s);
+      rethrow;
+    }
   }
 
   Future<void> deleteHabit(String id) async {

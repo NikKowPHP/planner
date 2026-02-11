@@ -8,6 +8,8 @@ import '../providers/app_providers.dart';
 import '../widgets/glass_card.dart';
 import '../theme/glass_theme.dart';
 import '../models/habit.dart';
+import '../services/logger.dart';
+import '../widgets/responsive_layout.dart';
 
 // ─── Shared helper ───────────────────────────────────────────────
 int calculateStreak(List<DateTime> logs, DateTime today) {
@@ -99,146 +101,154 @@ class _HabitPageState extends ConsumerState<HabitPage> {
     final logsAsync = ref.watch(habitLogsProvider);
     final today = DateTime.now();
     final normalizedToday = DateTime(today.year, today.month, today.day);
+    final isMobile = ResponsiveLayout.isMobile(context);
 
-    return Row(
-      children: [
-        // ── LEFT: Habit list ──────────────────────────────────
-        Expanded(
-          flex: 3,
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    // Mobile: Show detail panel as full screen if selected
+    if (isMobile && _selectedHabit != null) {
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) return;
+          setState(() => _selectedHabit = null);
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              // Custom back button header
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    onPressed: () => setState(() => _selectedHabit = null),
+                  ),
+                  const Text(
+                    "Habit Details",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              Expanded(
+                child: _HabitDetailPanel(
+                  habit: _selectedHabit!,
+                  logs: logsAsync.value?[_selectedHabit!.id] ?? [],
+                  onClose: () => setState(() => _selectedHabit = null),
+                  onDelete: () {
+                    ref
+                        .read(habitsProvider.notifier)
+                        .deleteHabit(_selectedHabit!.id);
+                    setState(() => _selectedHabit = null);
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final listContent = Padding(
+      padding: EdgeInsets.all(isMobile ? 16.0 : 24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Title row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Habits',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.add, color: Colors.white),
+                onPressed: () => _showAddHabitDialog(context, ref),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _DateHeaderBar(today: normalizedToday),
+          // Date label
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
               children: [
-                // Title row
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Habit',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(
-                            Icons.grid_view,
-                            color: Colors.white54,
-                            size: 20,
-                          ),
-                          onPressed: () {},
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.add, color: Colors.white),
-                          onPressed: () => _showAddHabitDialog(context, ref),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                // ── Date header bar ──────────────────────────
-                _DateHeaderBar(today: normalizedToday),
-
-                const SizedBox(height: 8),
-
-                // ── Date label ──
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.event_note,
-                        color: Colors.white38,
-                        size: 14,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        DateFormat('MMM d').format(today),
-                        style: const TextStyle(
-                          color: Colors.white38,
-                          fontSize: 12,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      const Icon(
-                        Icons.chevron_right,
-                        color: Colors.white24,
-                        size: 14,
-                      ),
-                    ],
-                  ),
-                ),
-
-                // ── Habit list ───────────────────────────────
-                Expanded(
-                  child: habitsAsync.when(
-                    data: (habits) {
-                      if (habits.isEmpty) {
-                        return Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.loop,
-                                color: Colors.white.withValues(alpha: 0.15),
-                                size: 64,
-                              ),
-                              const SizedBox(height: 16),
-                              const Text(
-                                'No habits yet',
-                                style: TextStyle(color: Colors.white38),
-                              ),
-                              const SizedBox(height: 8),
-                              TextButton.icon(
-                                onPressed: () =>
-                                    _showAddHabitDialog(context, ref),
-                                icon: const Icon(Icons.add, size: 16),
-                                label: const Text('Create your first habit'),
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-                      return ListView.builder(
-                        itemCount: habits.length,
-                        itemBuilder: (context, index) {
-                          final habit = habits[index];
-                          final logs = logsAsync.value?[habit.id] ?? [];
-                          return _HabitItem(
-                            habit: habit,
-                            logs: logs,
-                            today: normalizedToday,
-                            isSelected: _selectedHabit?.id == habit.id,
-                            onTap: () => setState(() => _selectedHabit = habit),
-                            onToggle: () => ref.read(habitToggleProvider)(
-                              habit.id,
-                              normalizedToday,
-                            ),
-                          );
-                        },
-                      );
-                    },
-                    loading: () => const Center(child: CircularProgressIndicator()),
-                    error: (e, s) => Center(
-                      child: Text(
-                        'Error: $e',
-                        style: const TextStyle(color: Colors.redAccent),
-                      ),
-                    ),
-                  ),
+                const Icon(Icons.event_note, color: Colors.white38, size: 14),
+                const SizedBox(width: 6),
+                Text(
+                  DateFormat('MMM d').format(today),
+                  style: const TextStyle(color: Colors.white38, fontSize: 12),
                 ),
               ],
             ),
           ),
-        ),
 
-        // ── RIGHT: Detail panel ──────────────────────────────
+          Expanded(
+            child: habitsAsync.when(
+              data: (habits) {
+                if (habits.isEmpty) {
+                  return const Center(
+                    child: Text(
+                      "No habits",
+                      style: TextStyle(color: Colors.white38),
+                    ),
+                  );
+                }
+                return ListView.builder(
+                  padding: EdgeInsets.only(bottom: isMobile ? 100 : 0),
+                  itemCount: habits.length,
+                  itemBuilder: (context, index) {
+                    final habit = habits[index];
+                    final logs = logsAsync.value?[habit.id] ?? [];
+                    return _HabitItem(
+                      habit: habit,
+                      logs: logs,
+                      today: normalizedToday,
+                      isSelected: _selectedHabit?.id == habit.id,
+                      onTap: () => setState(() => _selectedHabit = habit),
+                      onToggle: () async {
+                        try {
+                          await ref.read(habitToggleProvider)(
+                            habit.id,
+                            normalizedToday,
+                          );
+                        } catch (e) {
+                          ref
+                              .read(loggerProvider)
+                              .error(
+                                'Habit Toggle Error',
+                                e,
+                                StackTrace.current,
+                              );
+                        }
+                      },
+                    );
+                  },
+                );
+              },
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, s) => Text('Error: $e'),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (isMobile) {
+      return listContent;
+    }
+
+    return Row(
+      children: [
+        Expanded(flex: 3, child: listContent),
         if (_selectedHabit != null) ...[
           const VerticalDivider(width: 1, color: Colors.white10),
           Expanded(
@@ -440,21 +450,33 @@ class _HabitPageState extends ConsumerState<HabitPage> {
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: () {
+              onPressed: () async {
+                final logger = FileLogger();
                 if (nameController.text.trim().isNotEmpty) {
-                  final c = _kHabitColors[selectedColorIndex];
-                  final colorHex =
-                      '#${c.toARGB32().toRadixString(16).substring(2)}';
-                  final iconCode = _kHabitIcons[selectedIconIndex].codePoint
-                      .toString();
-                  ref
-                      .read(habitsProvider.notifier)
-                      .createHabit(
-                        nameController.text.trim(),
-                        icon: iconCode,
-                        color: colorHex,
-                      );
-                  Navigator.pop(ctx);
+                  await logger.log(
+                    'HABIT_UI: Requesting new habit: ${nameController.text}',
+                  );
+                  try {
+                    final c = _kHabitColors[selectedColorIndex];
+                    final colorHex =
+                        '#${c.toARGB32().toRadixString(16).substring(2)}';
+                    final iconCode = _kHabitIcons[selectedIconIndex].codePoint
+                        .toString();
+                    await ref
+                        .read(habitsProvider.notifier)
+                        .createHabit(
+                          nameController.text.trim(),
+                          icon: iconCode,
+                          color: colorHex,
+                        );
+                    if (ctx.mounted) Navigator.pop(ctx);
+                  } catch (e, s) {
+                    await logger.error(
+                      'HABIT_UI: Error during habit dialog submission',
+                      e,
+                      s,
+                    );
+                  }
                 }
               },
               child: const Text('Create'),
