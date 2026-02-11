@@ -38,6 +38,7 @@ dependencies:
   flutter_animate: ^4.5.2
   glass_kit: ^4.0.2
   simple_animations: ^5.2.0
+  shared_preferences: ^2.2.2
   
   # Supabase authentication
   supabase_flutter: ^2.5.0

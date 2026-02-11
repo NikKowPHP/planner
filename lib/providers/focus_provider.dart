@@ -1,0 +1,231 @@
+import 'dart:async';
+import 'dart:convert';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../services/logger.dart';
+
+// State Model
+class FocusState {
+  final int remainingSeconds;
+  final int initialDuration; // For calculating progress
+  final bool isRunning;
+  final bool isStopwatch;
+  final DateTime? lastUpdated;
+  
+  // Target Info
+  final String? selectedTargetId;
+  final String? targetType; // 'task' or 'habit'
+
+  const FocusState({
+    required this.remainingSeconds,
+    this.initialDuration = 25 * 60,
+    this.isRunning = false,
+    this.isStopwatch = false,
+    this.lastUpdated,
+    this.selectedTargetId,
+    this.targetType,
+  });
+
+  FocusState copyWith({
+    int? remainingSeconds,
+    int? initialDuration,
+    bool? isRunning,
+    bool? isStopwatch,
+    DateTime? lastUpdated,
+    String? selectedTargetId,
+    String? targetType,
+    bool nullTarget = false,
+  }) {
+    return FocusState(
+      remainingSeconds: remainingSeconds ?? this.remainingSeconds,
+      initialDuration: initialDuration ?? this.initialDuration,
+      isRunning: isRunning ?? this.isRunning,
+      isStopwatch: isStopwatch ?? this.isStopwatch,
+      lastUpdated: lastUpdated ?? this.lastUpdated,
+      selectedTargetId: nullTarget ? null : (selectedTargetId ?? this.selectedTargetId),
+      targetType: nullTarget ? null : (targetType ?? this.targetType),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'remainingSeconds': remainingSeconds,
+    'initialDuration': initialDuration,
+    'isRunning': isRunning,
+    'isStopwatch': isStopwatch,
+    'lastUpdated': lastUpdated?.toIso8601String(),
+    'selectedTargetId': selectedTargetId,
+    'targetType': targetType,
+  };
+
+  factory FocusState.fromJson(Map<String, dynamic> json) {
+    return FocusState(
+      remainingSeconds: json['remainingSeconds'] ?? 25 * 60,
+      initialDuration: json['initialDuration'] ?? 25 * 60,
+      isRunning: json['isRunning'] ?? false,
+      isStopwatch: json['isStopwatch'] ?? false,
+      lastUpdated: json['lastUpdated'] != null ? DateTime.parse(json['lastUpdated']) : null,
+      selectedTargetId: json['selectedTargetId'],
+      targetType: json['targetType'],
+    );
+  }
+}
+
+// Notifier
+class FocusTimerNotifier extends AsyncNotifier<FocusState> {
+  Timer? _ticker;
+  static const String _storageKey = 'glassy_focus_state';
+
+  @override
+  Future<FocusState> build() async {
+    // Load from SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    final jsonStr = prefs.getString(_storageKey);
+    
+    if (jsonStr != null) {
+      try {
+        final savedState = FocusState.fromJson(jsonDecode(jsonStr));
+        return _restoreState(savedState);
+      } catch (e) {
+        FileLogger().error('FocusProvider: Error parsing saved state', e);
+      }
+    }
+    return const FocusState(remainingSeconds: 25 * 60);
+  }
+
+  // Restore logic to handle time passed while app was closed
+  FocusState _restoreState(FocusState saved) {
+    if (!saved.isRunning || saved.lastUpdated == null) {
+      return saved.copyWith(isRunning: false); // Ensure paused if data invalid
+    }
+
+    final now = DateTime.now();
+    final diff = now.difference(saved.lastUpdated!).inSeconds;
+
+    if (saved.isStopwatch) {
+      // Add elapsed time
+      _startTicker();
+      return saved.copyWith(
+        remainingSeconds: saved.remainingSeconds + diff,
+        lastUpdated: now,
+      );
+    } else {
+      // Subtract elapsed time
+      final newRemaining = saved.remainingSeconds - diff;
+      if (newRemaining <= 0) {
+        // Session finished while closed
+        return saved.copyWith(
+          remainingSeconds: 0,
+          isRunning: false,
+          lastUpdated: now,
+        );
+      } else {
+        _startTicker();
+        return saved.copyWith(
+          remainingSeconds: newRemaining,
+          lastUpdated: now,
+        );
+      }
+    }
+  }
+
+  void _startTicker() {
+    _ticker?.cancel();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      _tick();
+    });
+  }
+
+  void _tick() {
+    final current = state.value;
+    if (current == null || !current.isRunning) return;
+
+    if (current.isStopwatch) {
+       state = AsyncData(current.copyWith(
+         remainingSeconds: current.remainingSeconds + 1,
+         lastUpdated: DateTime.now(),
+       ));
+    } else {
+       if (current.remainingSeconds > 0) {
+         state = AsyncData(current.copyWith(
+           remainingSeconds: current.remainingSeconds - 1,
+           lastUpdated: DateTime.now(),
+         ));
+       } else {
+         _complete();
+       }
+    }
+    _persist(); // Optional: Persist every tick? Or rely on lifecycle. 
+    // For robustness, maybe every few seconds, but here we do every second for simplicity locally.
+  }
+
+  Future<void> _persist() async {
+    final current = state.value;
+    if (current == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_storageKey, jsonEncode(current.toJson()));
+  }
+
+  // --- Public Actions ---
+
+  void toggleTimer() {
+    final current = state.value;
+    if (current == null) return;
+
+    if (current.isRunning) {
+      _ticker?.cancel();
+      state = AsyncData(current.copyWith(isRunning: false, lastUpdated: DateTime.now()));
+    } else {
+      _startTicker();
+      state = AsyncData(current.copyWith(isRunning: true, lastUpdated: DateTime.now()));
+    }
+    _persist();
+  }
+
+  void setMode({required bool isStopwatch}) {
+    _ticker?.cancel();
+    state = AsyncData(state.value!.copyWith(
+      isStopwatch: isStopwatch,
+      isRunning: false,
+      remainingSeconds: isStopwatch ? 0 : 25 * 60,
+      initialDuration: isStopwatch ? 0 : 25 * 60,
+    ));
+    _persist();
+  }
+
+  void setTarget(String? id, String? type) {
+    state = AsyncData(state.value!.copyWith(
+      selectedTargetId: id,
+      targetType: type,
+      nullTarget: id == null,
+    ));
+    _persist();
+  }
+
+  void completeSession() {
+    _complete();
+  }
+
+  void _complete() {
+    _ticker?.cancel();
+    final current = state.value!;
+    
+    // Don't auto-reset value yet, UI needs to see "00:00" to trigger save
+    state = AsyncData(current.copyWith(
+      isRunning: false,
+      remainingSeconds: 0,
+    ));
+    _persist();
+  }
+
+  void reset() {
+     _ticker?.cancel();
+     final current = state.value!;
+     state = AsyncData(current.copyWith(
+       isRunning: false,
+       remainingSeconds: current.isStopwatch ? 0 : 25 * 60,
+     ));
+     _persist();
+  }
+}
+
+final focusProvider = AsyncNotifierProvider<FocusTimerNotifier, FocusState>(FocusTimerNotifier.new);
