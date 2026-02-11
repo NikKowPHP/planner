@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../theme/glass_theme.dart';
 import '../providers/app_providers.dart';
 import 'glass_card.dart';
 
-class GlassRail extends StatelessWidget {
+class GlassRail extends ConsumerWidget {
   final AppTab activeTab;
   final Function(AppTab) onTabSelected;
 
@@ -15,7 +16,9 @@ class GlassRail extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final profileAsync = ref.watch(userProfileProvider);
+
     return Container(
       width: 80,
       height: double.infinity,
@@ -61,16 +64,59 @@ class GlassRail extends StatelessWidget {
 
             const Spacer(),
             
-            // User Avatar / Settings Placeholder
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.1),
-                border: Border.all(color: Colors.white24),
+            // User Avatar
+            PopupMenuButton<String>(
+              offset: const Offset(60, 0),
+              color: const Color(0xFF1E1E1E),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(Icons.person, color: Colors.white70, size: 20),
+              itemBuilder: (context) => [
+                PopupMenuItem(
+                  enabled: false,
+                  child: Text(
+                    profileAsync.value?.username ?? 'User',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const PopupMenuDivider(),
+                PopupMenuItem(
+                  value: 'logout',
+                  child: const Row(
+                    children: [
+                      Icon(Icons.logout, color: Colors.redAccent, size: 18),
+                      SizedBox(width: 8),
+                      Text('Logout', style: TextStyle(color: Colors.redAccent)),
+                    ],
+                  ),
+                ),
+              ],
+              onSelected: (val) {
+                if (val == 'logout') {
+                  ref.read(authServiceProvider).signOut();
+                }
+              },
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.1),
+                  border: Border.all(color: Colors.white24),
+                  image: profileAsync.value?.avatarUrl != null
+                      ? DecorationImage(
+                          image: NetworkImage(profileAsync.value!.avatarUrl!),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
+                ),
+                child: profileAsync.value?.avatarUrl == null
+                    ? const Icon(Icons.person, color: Colors.white70, size: 20)
+                    : null,
+              ),
             ),
           ],
         ),

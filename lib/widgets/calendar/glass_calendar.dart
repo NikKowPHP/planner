@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:table_calendar/table_calendar.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:table_calendar/table_calendar.dart';
+import 'package:intl/intl.dart';
 import '../../models/task.dart';
 import '../../theme/glass_theme.dart';
 import '../../providers/app_providers.dart';
@@ -17,214 +18,376 @@ class GlassCalendar extends ConsumerStatefulWidget {
 
 class _GlassCalendarState extends ConsumerState<GlassCalendar> {
   DateTime _focusedDay = DateTime.now();
-  DateTime? _selectedDay;
-  final CalendarFormat _calendarFormat = CalendarFormat.month;
+  CalendarFormat _calendarFormat = CalendarFormat.month;
 
   @override
   Widget build(BuildContext context) {
     final tasksMap = ref.watch(calendarTasksProvider);
 
-    return Column(
+    return Stack(
       children: [
-        GlassCard(
-          padding: EdgeInsets.zero,
-          child: TableCalendar<Task>(
-            firstDay: DateTime.utc(2020, 1, 1),
-            lastDay: DateTime.utc(2030, 12, 31),
-            focusedDay: _focusedDay,
-            calendarFormat: _calendarFormat,
-            selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-            eventLoader: (day) {
-              final normalized = DateTime(day.year, day.month, day.day);
-              return tasksMap[normalized] ?? [];
-            },
-            startingDayOfWeek: StartingDayOfWeek.monday,
-            
-            // Styles
-            headerStyle: const HeaderStyle(
-              formatButtonVisible: false,
-              titleCentered: true,
-              titleTextStyle: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-              leftChevronIcon: Icon(Icons.chevron_left, color: Colors.white),
-              rightChevronIcon: Icon(Icons.chevron_right, color: Colors.white),
-            ),
-            daysOfWeekStyle: const DaysOfWeekStyle(
-              weekdayStyle: TextStyle(color: Colors.white70),
-              weekendStyle: TextStyle(color: Colors.white38),
-            ),
-            calendarStyle: CalendarStyle(
-              defaultTextStyle: const TextStyle(color: Colors.white),
-              weekendTextStyle: const TextStyle(color: Colors.white38),
-              outsideTextStyle: const TextStyle(color: Colors.white12),
-              todayDecoration: BoxDecoration(
-                color: GlassTheme.accentColor.withValues(alpha: 0.3),
-                shape: BoxShape.circle,
-              ),
-              selectedDecoration: const BoxDecoration(
-                color: GlassTheme.accentColor,
-                shape: BoxShape.circle,
-              ),
-              markerSize: 0, // We use custom builder
-            ),
-            
-            // Interactivity
-            onDaySelected: (selectedDay, focusedDay) {
-              setState(() {
-                _selectedDay = selectedDay;
-                _focusedDay = focusedDay;
-              });
-            },
-            onPageChanged: (focusedDay) {
-              _focusedDay = focusedDay;
-            },
-
-            // Custom Builders
-            calendarBuilders: CalendarBuilders(
-              markerBuilder: (context, date, events) {
-                if (events.isEmpty) return const SizedBox();
+        Column(
+          children: [
+            _buildHeader(),
+            Expanded(
+              child: TableCalendar<Task>(
+                firstDay: DateTime.utc(2020, 1, 1),
+                lastDay: DateTime.utc(2030, 12, 31),
+                focusedDay: _focusedDay,
+                calendarFormat: _calendarFormat,
+                startingDayOfWeek: StartingDayOfWeek.sunday,
                 
-                return Positioned(
-                  bottom: 1,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: events.take(4).map((task) {
-                      return Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 1.0),
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: _getPriorityColor(task.priority),
-                        ),
-                      );
-                    }).toList(),
+                // Layout settings to look like a full grid
+                shouldFillViewport: true,
+                rowHeight: 120, // Taller rows for tasks
+                daysOfWeekHeight: 40,
+
+                headerVisible: false, // Using custom header
+
+                daysOfWeekStyle: const DaysOfWeekStyle(
+                  weekdayStyle: TextStyle(color: Colors.white38, fontSize: 12),
+                  weekendStyle: TextStyle(color: Colors.white38, fontSize: 12),
+                ),
+                
+                calendarBuilders: CalendarBuilders(
+                  defaultBuilder: (context, day, focusedDay) =>
+                      _buildCell(context, day, tasksMap, isToday: false),
+                  todayBuilder: (context, day, focusedDay) =>
+                      _buildCell(context, day, tasksMap, isToday: true),
+                  outsideBuilder: (context, day, focusedDay) =>
+                      _buildCell(context, day, tasksMap, isOutside: true),
+                  selectedBuilder: (context, day, focusedDay) => _buildCell(
+                    context,
+                    day,
+                    tasksMap,
+                    isToday: isSameDay(day, DateTime.now()),
                   ),
-                );
-              },
-              defaultBuilder: (context, day, focusedDay) {
-                 return _buildCell(day, tasksMap);
-              },
-              todayBuilder: (context, day, focusedDay) {
-                return _buildCell(day, tasksMap, isToday: true);
-              },
-              selectedBuilder: (context, day, focusedDay) {
-                return _buildCell(day, tasksMap, isSelected: true);
-              },
+                ),
+                
+                onPageChanged: (focusedDay) {
+                  setState(() => _focusedDay = focusedDay);
+                },
+              ),
             ),
-          ),
+          ],
         ),
         
-        const SizedBox(height: 16),
-        
-        // Selected Day Task List
-        Expanded(
-          child: _selectedDay == null 
-              ? const Center(child: Text("Select a day to view tasks", style: TextStyle(color: Colors.white38)))
-              : _buildDayTaskList(tasksMap),
+        // Floating Bottom Bar (View Switcher)
+        Positioned(
+          bottom: 24,
+          left: 24,
+          right: 24,
+          child: Center(
+            child: GlassCard(
+              height: 50,
+              width: 320,
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              borderRadius: 25,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _ViewSwitchButton(text: 'Year', isSelected: false),
+                  _ViewSwitchButton(
+                    text: 'Month',
+                    isSelected: _calendarFormat == CalendarFormat.month,
+                    onTap: () =>
+                        setState(() => _calendarFormat = CalendarFormat.month),
+                  ),
+                  _ViewSwitchButton(
+                    text: 'Week',
+                    isSelected: _calendarFormat == CalendarFormat.week,
+                    onTap: () =>
+                        setState(() => _calendarFormat = CalendarFormat.week),
+                  ),
+                  _ViewSwitchButton(text: 'Day', isSelected: false),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.orange,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text(
+                      'Upgrade',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildCell(DateTime day, Map<DateTime, List<Task>> tasksMap, {bool isToday = false, bool isSelected = false}) {
-    final normalized = DateTime(day.year, day.month, day.day);
-    final tasks = tasksMap[normalized] ?? [];
-
-    return Container(
-      margin: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: isSelected 
-            ? GlassTheme.accentColor 
-            : (isToday ? GlassTheme.accentColor.withValues(alpha: 0.2) : Colors.transparent),
-        borderRadius: BorderRadius.circular(8),
-        border: isToday && !isSelected ? Border.all(color: GlassTheme.accentColor.withValues(alpha: 0.5)) : null,
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.start,
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const SizedBox(height: 4),
-          Text(
-            '${day.day}',
-            style: TextStyle(
-              color: isSelected ? Colors.white : Colors.white70,
-              fontWeight: isToday || isSelected ? FontWeight.bold : FontWeight.normal,
-            ),
+          Row(
+            children: [
+              const Icon(Icons.calendar_month, color: Colors.white, size: 24),
+              const SizedBox(width: 12),
+              Text(
+                DateFormat('MMMM yyyy').format(_focusedDay),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
           ),
-          const Spacer(),
-          if (tasks.isNotEmpty)
-            Column(
-              children: tasks.take(3).map((task) {
-                return Container(
-                  margin: const EdgeInsets.symmetric(vertical: 1, horizontal: 2),
-                  height: 3,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: _getPriorityColor(task.priority),
-                    borderRadius: BorderRadius.circular(2),
+          Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.chevron_left, color: Colors.white70),
+                onPressed: () {
+                  setState(() {
+                    _focusedDay = DateTime(
+                      _focusedDay.year,
+                      _focusedDay.month - 1,
+                    );
+                  });
+                },
+              ),
+              TextButton(
+                onPressed: () => setState(() => _focusedDay = DateTime.now()),
+                style: TextButton.styleFrom(
+                  backgroundColor: Colors.white.withValues(alpha: 0.1),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                );
-              }).toList(),
-            ),
-          const SizedBox(height: 4),
+                ),
+                child: const Text(
+                  'Today',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.chevron_right, color: Colors.white70),
+                onPressed: () {
+                  setState(() {
+                    _focusedDay = DateTime(
+                      _focusedDay.year,
+                      _focusedDay.month + 1,
+                    );
+                  });
+                },
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildDayTaskList(Map<DateTime, List<Task>> tasksMap) {
-    if (_selectedDay == null) return const SizedBox();
-    final normalized = DateTime(_selectedDay!.year, _selectedDay!.month, _selectedDay!.day);
+  Widget _buildCell(
+    BuildContext context,
+    DateTime day,
+    Map<DateTime, List<Task>> tasksMap, {
+    bool isToday = false,
+    bool isOutside = false,
+  }) {
+    final normalized = DateTime(day.year, day.month, day.day);
     final tasks = tasksMap[normalized] ?? [];
 
-    if (tasks.isEmpty) {
-      return const Center(child: Text("No tasks for this day", style: TextStyle(color: Colors.white38)));
-    }
-
-    return ListView.builder(
-      itemCount: tasks.length,
-      itemBuilder: (context, index) {
-        final task = tasks[index];
-        return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          child: ListTile(
-            onTap: () => widget.onTaskTap(task),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            tileColor: Colors.white.withValues(alpha: 0.05),
-            leading: Checkbox(
-               value: task.isCompleted,
-               onChanged: (val) {
-                 final updated = Task(
-                    id: task.id, userId: task.userId, listId: task.listId, 
-                    title: task.title, description: task.description, 
-                    dueDate: task.dueDate, priority: task.priority, 
-                    tagIds: task.tagIds, isPinned: task.isPinned, 
-                    isCompleted: val ?? false
-                 );
-                 ref.read(tasksProvider.notifier).updateTask(updated);
-               },
-               activeColor: GlassTheme.accentColor,
-               side: const BorderSide(color: Colors.white54),
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+          right: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+        ),
+        color: isOutside
+            ? Colors.transparent
+            : Colors.white.withValues(alpha: 0.01),
+      ),
+      padding: const EdgeInsets.all(4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Day Number Highlight
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: isToday ? GlassTheme.accentColor : Colors.transparent,
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Text(
+                    '${day.day}',
+                    style: TextStyle(
+                      color: isToday
+                          ? Colors.white
+                          : (isOutside ? Colors.white24 : Colors.white70),
+                      fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          // Tasks List
+          Expanded(
+            child: ListView.builder(
+              physics:
+                  const NeverScrollableScrollPhysics(), // Provide interaction in details view instead
+              itemCount: tasks.length,
+              itemBuilder: (context, index) {
+                // Show max 4 tasks per cell to avoid clutter
+                if (index > 3) return const SizedBox.shrink();
+                if (index == 3) {
+                  return Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: Text(
+                      '+${tasks.length - 3} more',
+                      style: const TextStyle(
+                        color: Colors.white38,
+                        fontSize: 10,
+                      ),
+                    ),
+                  );
+                }
+                return _CalendarTaskItem(
+                  task: tasks[index],
+                  onTap: widget.onTaskTap,
+                );
+              },
             ),
-            title: Text(
-              task.title,
-              style: TextStyle(
-                color: Colors.white,
-                decoration: task.isCompleted ? TextDecoration.lineThrough : null,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CalendarTaskItem extends StatelessWidget {
+  final Task task;
+  final Function(Task) onTap;
+
+  const _CalendarTaskItem({required this.task, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _getTaskColor(task);
+    
+    return GestureDetector(
+      onTap: () => onTap(task),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.2),
+          borderRadius: BorderRadius.circular(4),
+          border: Border(left: BorderSide(color: color, width: 3)),
+        ),
+        child: Row(
+          children: [
+            // Tiny checkbox visual
+            if (!task.isCompleted)
+              Container(
+                margin: const EdgeInsets.only(right: 4),
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.white54, width: 1),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            Expanded(
+              child: Text(
+                task.title,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.9),
+                  fontSize: 10,
+                  decoration: task.isCompleted
+                      ? TextDecoration.lineThrough
+                      : null,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-            trailing: Icon(Icons.flag, size: 16, color: _getPriorityColor(task.priority)),
-          ),
-        );
-      },
+            if (task.dueDate != null)
+              Text(
+                DateFormat('HH:mm').format(task.dueDate!),
+                style: const TextStyle(color: Colors.white38, fontSize: 8),
+              ),
+          ],
+        ),
+      ),
     );
   }
 
-  Color _getPriorityColor(int priority) {
-    switch (priority) {
-      case 3: return Colors.redAccent;
-      case 2: return Colors.orangeAccent;
-      case 1: return Colors.blueAccent;
-      default: return Colors.grey;
+  Color _getTaskColor(Task task) {
+    if (task.isCompleted) return Colors.grey;
+    switch (task.priority) {
+      case 3:
+        return const Color(0xFFFF6B6B); // Red
+      case 2:
+        return const Color(0xFFFECA57); // Yellow
+      case 1:
+        return const Color(0xFF48DBFB); // Blue
+      default:
+        // Generate a deterministic pastel color based on hash if no priority
+        final colors = [
+          const Color(0xFF10AC84), // Teal
+          const Color(0xFF5F27CD), // Purple
+          const Color(0xFFFF9F43), // Orange
+          const Color(0xFF54A0FF), // Blue
+        ];
+        return colors[task.title.hashCode % colors.length];
     }
+  }
+}
+
+class _ViewSwitchButton extends StatelessWidget {
+  final String text;
+  final bool isSelected;
+  final VoidCallback? onTap;
+
+  const _ViewSwitchButton({
+    required this.text,
+    required this.isSelected,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? Colors.white.withValues(alpha: 0.1)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          text,
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.white54,
+            fontSize: 13,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      ),
+    );
   }
 }

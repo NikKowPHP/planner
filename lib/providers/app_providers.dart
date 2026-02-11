@@ -19,6 +19,18 @@ final authUserProvider = StreamProvider<User?>((ref) {
   return ref.watch(authServiceProvider).authStateChanges.map((event) => event.session?.user);
 });
 
+final userProfileProvider = FutureProvider((ref) async {
+  final authState = ref.watch(authUserProvider);
+  return authState.when(
+    data: (user) {
+      if (user == null) return null;
+      return ref.read(authServiceProvider).getCurrentProfile();
+    },
+    loading: () => null,
+    error: (_, _) => null,
+  );
+});
+
 // --- Data Notifiers (CRUD) ---
 
 // 1. Tasks

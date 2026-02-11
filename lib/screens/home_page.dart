@@ -56,6 +56,7 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     // Reusable Sidebar Widget
     final sidebar = GlassSidebar(
+      width: isDesktop ? 250 : double.infinity, // Flexible width
       selectedIndex: selectedIndex,
       userLists: lists,
       tags: tags.map((t) => t.name).toList(),
@@ -78,12 +79,22 @@ class _HomePageState extends ConsumerState<HomePage> {
       key: _scaffoldKey, // Attach Key
       extendBody: true,
       // Only show Drawer on mobile and when on Tasks tab
-      drawer: (!isDesktop && activeTab == AppTab.tasks)
+      drawer: (!isDesktop && activeTab == AppTab.tasks) 
           ? Drawer(
               backgroundColor: const Color(0xFF0F0F0F),
-              width: 280,
-              child: sidebar,
-            )
+              width: 300,
+              child: Column(
+                children: [
+                  _buildDrawerHeader(ref),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      child: sidebar,
+                    ),
+                  ),
+                ],
+              ),
+            ) 
           : null,
       body: Stack(
         children: [
@@ -561,5 +572,59 @@ class _HomePageState extends ConsumerState<HomePage> {
            },
         ),
      );
+  }
+
+  Widget _buildDrawerHeader(WidgetRef ref) {
+    final profileAsync = ref.watch(userProfileProvider);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(24, 60, 24, 24),
+      child: Row(
+        children: [
+          Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white.withValues(alpha: 0.1),
+              border: Border.all(color: Colors.white24),
+              image: profileAsync.value?.avatarUrl != null
+                  ? DecorationImage(
+                      image: NetworkImage(profileAsync.value!.avatarUrl!),
+                      fit: BoxFit.cover,
+                    )
+                  : null,
+            ),
+            child: profileAsync.value?.avatarUrl == null
+                ? const Icon(Icons.person, color: Colors.white70, size: 24)
+                : null,
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  profileAsync.value?.username ?? 'User',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                GestureDetector(
+                  onTap: () => ref.read(authServiceProvider).signOut(),
+                  child: const Text(
+                    'Logout',
+                    style: TextStyle(color: Colors.redAccent, fontSize: 14),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

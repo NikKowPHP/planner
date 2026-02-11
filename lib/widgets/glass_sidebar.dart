@@ -16,6 +16,7 @@ class GlassSidebar extends StatelessWidget {
     required this.onAddFilter,
     required this.onEditFilter,
     required this.onDeleteFilter,
+    this.width, // Add width parameter
   });
 
   final int selectedIndex;
@@ -28,11 +29,12 @@ class GlassSidebar extends StatelessWidget {
   final VoidCallback onAddFilter;
   final Function(CustomFilter) onEditFilter;
   final Function(CustomFilter) onDeleteFilter;
+  final double? width; // Add field
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 250,
+      width: width ?? 250, // Use parameter or default
       height: double.infinity,
       padding: const EdgeInsets.only(
         top: 24,
