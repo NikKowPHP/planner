@@ -223,25 +223,40 @@ class HomeViewNotifier extends Notifier<HomeViewState> {
   HomeViewState build() => HomeViewState();
 
   void setActiveTab(AppTab tab) {
-    ref.read(loggerProvider).log('UI_STATE: Changing Active Tab to $tab');
+    ref.read(loggerProvider).log('GESTURE: Navigation Rail/Bar switched to $tab');
     state = state.copyWith(activeTab: tab);
   }
 
   void setIndex(int index) {
-    ref.read(loggerProvider).log('UI_STATE: Changing Sidebar Index to $index');
+    ref.read(loggerProvider).log('GESTURE: Sidebar item selected at index $index');
     state = state.copyWith(selectedIndex: index);
   }
   void setGroupBy(GroupBy group) => state = state.copyWith(groupBy: group);
   void setSortBy(SortBy sort) => state = state.copyWith(sortBy: sort);
   void toggleHideCompleted() => state = state.copyWith(hideCompleted: !state.hideCompleted);
-  void selectTask(Task? task) => state = state.copyWith(selectedTask: task, nullSelectedTask: task == null);
+  void selectTask(Task? task) {
+    ref.read(loggerProvider).log('GESTURE: Task ${task?.id ?? "none"} selected for detail view');
+    state = state.copyWith(selectedTask: task, nullSelectedTask: task == null);
+  }
   void selectHabit(Habit? habit) => state = state.copyWith(selectedHabit: habit, nullSelectedHabit: habit == null);
   void toggleSidebar() => state = state.copyWith(isSidebarVisible: !state.isSidebarVisible);
-  void toggleSearch() => state = state.copyWith(isSearchVisible: !state.isSearchVisible, searchQuery: '');
+  void toggleSearch() {
+    final bool currentlyVisible = state.isSearchVisible;
+    ref.read(loggerProvider).log('ACTION: Fuzzy Search triggered. Visible: ${!currentlyVisible}');
+    
+    state = state.copyWith(
+      isSearchVisible: !currentlyVisible,
+      searchQuery: '',
+      // Ensure detail panels are closed if search opens
+      nullSelectedTask: !currentlyVisible,
+    );
+  }
   void setSearchQuery(String query) => state = state.copyWith(searchQuery: query);
 
   // Navigation helper for search results
   void navigateToItem(dynamic item) {
+    final name = item is Task ? item.title : (item is Habit ? item.name : (item is TaskList ? item.name : "Unknown"));
+    ref.read(loggerProvider).log('GESTURE: Search result clicked -> Navigating to $name');
     state = state.copyWith(isSearchVisible: false, searchQuery: '');
 
     if (item is Task) {
@@ -526,29 +541,29 @@ class HabitsNotifier extends AsyncNotifier<List<Habit>> {
 }
 
 // Fetches logs and groups them by Habit ID
-final habitLogsProvider = FutureProvider<Map<String, List<DateTime>>>((
-  ref,
-) async {
-  final habits = ref.watch(habitsProvider).asData?.value ?? [];
-  if (habits.isEmpty) return {};
+final habitLogsProvider = FutureProvider<Map<String, List<DateTime>>>(
+  (ref) async {
+    final habits = ref.watch(habitsProvider).asData?.value ?? [];
+    if (habits.isEmpty) return {};
 
-  final logs = await ref
-      .read(habitServiceProvider)
-      .getLogs(habits.map((h) => h.id).toList());
+    final logs = await ref
+        .read(habitServiceProvider)
+        .getLogs(habits.map((h) => h.id).toList());
 
-  final Map<String, List<DateTime>> grouped = {};
-  for (var log in logs) {
-    if (grouped[log.habitId] == null) grouped[log.habitId] = [];
-    // Normalize to midnight
-    final d = DateTime(
-      log.completedAt.year,
-      log.completedAt.month,
-      log.completedAt.day,
-    );
-    grouped[log.habitId]!.add(d);
-  }
-  return grouped;
-});
+    final Map<String, List<DateTime>> grouped = {};
+    for (var log in logs) {
+      if (grouped[log.habitId] == null) grouped[log.habitId] = [];
+      // Normalize to midnight
+      final d = DateTime(
+        log.completedAt.year,
+        log.completedAt.month,
+        log.completedAt.day,
+      );
+      grouped[log.habitId]!.add(d);
+    }
+    return grouped;
+  },
+);
 
 // Helper to toggle locally and remotely
 final habitToggleProvider = Provider((ref) {

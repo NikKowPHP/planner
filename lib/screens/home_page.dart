@@ -22,6 +22,11 @@ import '../widgets/calendar/glass_calendar.dart';
 import 'habit_page.dart';
 import '../models/task_list.dart';
 
+// NEW: Define Intent
+class SearchIntent extends Intent {
+  const SearchIntent();
+}
+
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
 
@@ -34,6 +39,23 @@ class _HomePageState extends ConsumerState<HomePage> {
   final FileLogger _logger = FileLogger();
   final GlobalKey<ScaffoldState> _scaffoldKey =
       GlobalKey<ScaffoldState>(); // Add Key
+  final FocusNode _mainFocusNode = FocusNode(); // ADD THIS
+
+  @override
+  void initState() {
+    super.initState();
+    // Ensure the page grabs focus immediately to listen for shortcuts
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _mainFocusNode.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _taskController.dispose();
+    _mainFocusNode.dispose(); // ADD THIS
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -79,14 +101,40 @@ class _HomePageState extends ConsumerState<HomePage> {
       },
     );
 
+    // MODIFIED: Simplified Shortcut Logic using CallbackShortcuts + Explicit FocusNode
     return CallbackShortcuts(
       bindings: {
-        const SingleActivator(LogicalKeyboardKey.keyF, control: true): () => notifier.toggleSearch(),
-        const SingleActivator(LogicalKeyboardKey.keyF, meta: true): () => notifier.toggleSearch(),
+        const SingleActivator(LogicalKeyboardKey.keyK, control: true): () {
+          FileLogger().log('GESTURE: Keyboard Shortcut Ctrl+K recognized');
+          // Ensure we clear focus from any active elements before opening search
+          FocusScope.of(context).unfocus();
+          notifier.toggleSearch();
+        },
+        const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () {
+          FileLogger().log('GESTURE: Keyboard Shortcut Cmd+K recognized');
+          // Ensure we clear focus from any active elements before opening search
+          FocusScope.of(context).unfocus();
+          notifier.toggleSearch();
+        },
+        const SingleActivator(LogicalKeyboardKey.escape): () {
+          if (isSearchVisible) {
+            FileLogger().log('GESTURE: Escape key pressed -> Closing Search');
+            notifier.toggleSearch();
+          }
+        },
       },
-      child: Scaffold(
-        key: _scaffoldKey, // Attach Key
-        extendBody: true,
+      child: Focus(
+        focusNode: _mainFocusNode, // Use the managed FocusNode
+        autofocus: true,
+        onFocusChange: (focused) {
+          if (!focused && !isSearchVisible) {
+            // Re-request focus if something else un-focuses the main listener
+            _mainFocusNode.requestFocus();
+          }
+        },
+        child: Scaffold(
+          key: _scaffoldKey, // Attach Key
+          extendBody: true,
         // Only show Drawer on mobile and when on Tasks tab
         drawer: (!isDesktop && activeTab == AppTab.tasks)
             ? Drawer(
@@ -183,6 +231,7 @@ class _HomePageState extends ConsumerState<HomePage> {
             const SearchDialog(),
           ],
         ],
+          ),
         ),
       ),
     );
@@ -266,6 +315,7 @@ class _HomePageState extends ConsumerState<HomePage> {
               ),
               onSubmitted: (value) async {
                  if (value.trim().isEmpty) return;
+                FileLogger().log('GESTURE: Quick add task submitted: "$value"');
                  await _safeAction(() async {
                    await ref.read(tasksProvider.notifier).createTask(value);
                    if (mounted) _taskController.clear();

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/app_providers.dart';
 import '../../theme/glass_theme.dart';
+import '../../services/logger.dart';
 
 class HomeAppBar extends ConsumerWidget {
   final VoidCallback? onMenuPressed; // Add this
@@ -37,8 +39,14 @@ class HomeAppBar extends ConsumerWidget {
         Row(
           children: [
             IconButton(
+              key: const ValueKey('search_button'), // Added key for identification
               icon: const Icon(Icons.search, color: Colors.white),
-              onPressed: () => ref.read(homeViewProvider.notifier).toggleSearch(),
+              tooltip: 'Search (Ctrl+K)',
+              onPressed: () {
+                FileLogger().log('GESTURE: Search icon button clicked in HomeAppBar');
+                HapticFeedback.lightImpact();
+                ref.read(homeViewProvider.notifier).toggleSearch();
+              },
             ),
             if (isLoading)
               const Padding(
@@ -73,39 +81,60 @@ class HomeAppBar extends ConsumerWidget {
           _buildRadioItem(
             'Date',
             currentGroup == GroupBy.date,
-            () => notifier.setGroupBy(GroupBy.date),
+            () {
+              FileLogger().log('GESTURE: Grouping changed to Date');
+              notifier.setGroupBy(GroupBy.date);
+            },
           ),
           _buildRadioItem(
             'Priority',
             currentGroup == GroupBy.priority,
-            () => notifier.setGroupBy(GroupBy.priority),
+            () {
+              FileLogger().log('GESTURE: Grouping changed to Priority');
+              notifier.setGroupBy(GroupBy.priority);
+            },
           ),
           _buildRadioItem(
             'List',
             currentGroup == GroupBy.list,
-            () => notifier.setGroupBy(GroupBy.list),
+            () {
+              FileLogger().log('GESTURE: Grouping changed to List');
+              notifier.setGroupBy(GroupBy.list);
+            },
           ),
           _buildRadioItem(
             'None',
             currentGroup == GroupBy.none,
-            () => notifier.setGroupBy(GroupBy.none),
+            () {
+              FileLogger().log('GESTURE: Grouping changed to None');
+              notifier.setGroupBy(GroupBy.none);
+            },
           ),
           const PopupMenuDivider(),
           const PopupMenuItem(enabled: false, child: Text('SORT BY', style: TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.bold))),
           _buildRadioItem(
             'Date',
             currentSort == SortBy.date,
-            () => notifier.setSortBy(SortBy.date),
+            () {
+              FileLogger().log('GESTURE: Sorting changed to Date');
+              notifier.setSortBy(SortBy.date);
+            },
           ),
           _buildRadioItem(
             'Priority',
             currentSort == SortBy.priority,
-            () => notifier.setSortBy(SortBy.priority),
+            () {
+              FileLogger().log('GESTURE: Sorting changed to Priority');
+              notifier.setSortBy(SortBy.priority);
+            },
           ),
           _buildRadioItem(
             'Title',
             currentSort == SortBy.title,
-            () => notifier.setSortBy(SortBy.title),
+            () {
+              FileLogger().log('GESTURE: Sorting changed to Title');
+              notifier.setSortBy(SortBy.title);
+            },
           ),
         ],
       );
@@ -123,8 +152,10 @@ class HomeAppBar extends ConsumerWidget {
             checked: hideCompleted,
             value: 'hide',
             child: const Text('Hide Completed'),
-            onTap: () =>
-                ref.read(homeViewProvider.notifier).toggleHideCompleted(),
+            onTap: () {
+              FileLogger().log('GESTURE: Hide Completed toggled to ${!hideCompleted}');
+              ref.read(homeViewProvider.notifier).toggleHideCompleted();
+            },
           ),
         ],
       );

@@ -8,6 +8,7 @@ import '../providers/app_providers.dart';
 import '../providers/focus_provider.dart';
 import '../models/task.dart';
 import '../models/habit.dart';
+import '../services/logger.dart';
 
 class FocusPage extends ConsumerStatefulWidget {
   const FocusPage({super.key});
@@ -68,12 +69,12 @@ class _FocusPageState extends ConsumerState<FocusPage> {
                       _ToggleBtn(
                         text: "Pomo", 
                         isSelected: !state.isStopwatch, 
-                        onTap: () => ref.read(focusProvider.notifier).setMode(isStopwatch: false)
+                        onTap: () { FileLogger().log('GESTURE: Focus Mode switched to Pomodoro'); ref.read(focusProvider.notifier).setMode(isStopwatch: false); }
                       ),
                       _ToggleBtn(
                         text: "Stopwatch", 
                         isSelected: state.isStopwatch, 
-                        onTap: () => ref.read(focusProvider.notifier).setMode(isStopwatch: true)
+                        onTap: () { FileLogger().log('GESTURE: Focus Mode switched to Stopwatch'); ref.read(focusProvider.notifier).setMode(isStopwatch: true); }
                       ),
                     ],
                   ),
@@ -173,7 +174,11 @@ class _FocusPageState extends ConsumerState<FocusPage> {
 
                        // Start/Pause Button
                        GestureDetector(
-                        onTap: () => ref.read(focusProvider.notifier).toggleTimer(),
+                        onTap: () {
+                          final isRunning = ref.read(focusProvider).value?.isRunning ?? false;
+                          FileLogger().log('GESTURE: Focus Timer button pressed -> Action: ${isRunning ? "Pause" : "Start"}');
+                          ref.read(focusProvider.notifier).toggleTimer();
+                        },
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 64, vertical: 18),
                           decoration: BoxDecoration(

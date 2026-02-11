@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../models/task.dart';
 import '../theme/glass_theme.dart';
+import '../services/logger.dart';
 
 class TaskItem extends StatelessWidget {
   final Task task;
@@ -21,15 +22,24 @@ class TaskItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
-      onSecondaryTapUp: (details) => onContextMenu?.call(details),
-      onLongPressStart: (details) => onContextMenu?.call(
-        TapUpDetails(
-          kind: PointerDeviceKind.touch,
-          globalPosition: details.globalPosition,
-          localPosition: details.localPosition,
-        ),
-      ),
+      onTap: () {
+        FileLogger().log('GESTURE: TaskItem tap detected for "${task.title}" (ID: ${task.id})');
+        onTap?.call();
+      },
+      onSecondaryTapUp: (details) {
+        FileLogger().log('GESTURE: TaskItem right-click (context menu) for "${task.title}"');
+        onContextMenu?.call(details);
+      },
+      onLongPressStart: (details) {
+        FileLogger().log('GESTURE: TaskItem long-press (context menu) for "${task.title}"');
+        onContextMenu?.call(
+          TapUpDetails(
+            kind: PointerDeviceKind.touch,
+            globalPosition: details.globalPosition,
+            localPosition: details.localPosition,
+          ),
+        );
+      },
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -48,7 +58,10 @@ class TaskItem extends StatelessWidget {
               scale: 0.9,
               child: Checkbox(
                 value: task.isCompleted,
-                onChanged: onToggle,
+                onChanged: (val) {
+                  FileLogger().log('GESTURE: TaskCheckbox toggled for "${task.title}" -> New Value: $val');
+                  onToggle(val);
+                },
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(4),
                 ),
@@ -131,7 +144,10 @@ class TaskItem extends StatelessWidget {
 
             // More Options Button
             GestureDetector(
-              onTapUp: (details) => onContextMenu?.call(details),
+              onTapUp: (details) {
+                FileLogger().log('GESTURE: TaskItem more options clicked for "${task.title}"');
+                onContextMenu?.call(details);
+              },
               child: Padding(
                 padding: const EdgeInsets.only(left: 8),
                 child: Icon(Icons.more_vert, size: 20, color: Colors.white38),

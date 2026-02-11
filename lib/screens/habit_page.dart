@@ -223,6 +223,7 @@ class _HabitPageState extends ConsumerState<HabitPage> {
                       isSelected: _selectedHabit?.id == habit.id,
                       onTap: () => setState(() => _selectedHabit = habit),
                       onToggle: () async {
+                        FileLogger().log('GESTURE: Habit check-in toggled for "${habit.name}"');
                         try {
                           await ref.read(habitToggleProvider)(
                             habit.id,
@@ -1241,7 +1242,7 @@ class _BarChartPainter extends CustomPainter {
 
     // Draw Y-axis labels
     for (int y = 0; y <= maxVal; y++) {
-      final yPos = topPadding + chartHeight - (y / maxVal * chartHeight);
+      final yPos = topPadding + chartHeight - (y / maxVal) * chartHeight;
       // Only draw a few labels & lines
       if (y == 0 || y == maxVal || y == (maxVal / 2).round()) {
         // Draw dashed line
