@@ -15,11 +15,17 @@ void main() async {
   
   UIUtils.configureSystemUI();
   
+  // NEW CODE: Create ProviderContainer for SystemTrayService access
+  final container = ProviderContainer();
+  
   // Initialize System Tray / Window Manager for Desktop
-  await SystemTrayService().init();
+  await SystemTrayService().init(container);
 
-  // Wrap app in ProviderScope for Riverpod
-  runApp(const ProviderScope(child: GlassyApp()));
+  // Wrap app in UncontrolledProviderScope to share the container
+  runApp(UncontrolledProviderScope(
+    container: container,
+    child: const GlassyApp(),
+  ));
 }
 
 class GlassyApp extends StatelessWidget {

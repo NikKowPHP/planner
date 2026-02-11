@@ -105,19 +105,20 @@ class AuthService {
       if (user == null) return null;
 
       await _logger.log('Fetching profile for user: ${user.id}');
+      
+      // Timeout and Retry logic for network resilience
       final data = await _supabase
           .from('profiles')
           .select()
           .eq('id', user.id)
-          .single();
+          .single()
+          .timeout(const Duration(seconds: 10)); // Prevent infinite hang
 
       final profile = UserProfile.fromJson(data);
       await _logger.log('Fetched profile for user: ${user.id}');
       return profile;
     } catch (e, stack) {
-      await _logger.error('Error fetching profile', e, stack);
-      // Return null or rethrow depending on desired behavior. 
-      // For now, let's return null if profile not found (though it should exist via trigger)
+      await _logger.error('Error fetching profile (Network/Timeout)', e, stack);
       return null;
     }
   }

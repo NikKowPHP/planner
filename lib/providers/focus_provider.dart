@@ -151,11 +151,16 @@ class FocusTimerNotifier extends AsyncNotifier<FocusState> {
            lastUpdated: DateTime.now(),
          ));
        } else {
+         // IMPORTANT: Cancel ticker before completing to prevent double-calls
+         _ticker?.cancel();
          _complete();
        }
     }
-    _persist(); // Optional: Persist every tick? Or rely on lifecycle. 
-    // For robustness, maybe every few seconds, but here we do every second for simplicity locally.
+    
+    // Ensure we persist the lastUpdated and remainingSeconds
+    // The SystemTrayService listener will automatically pick up this 
+    // state change and update the tooltip.
+    _persist();
   }
 
   Future<void> _persist() async {
@@ -175,8 +180,18 @@ class FocusTimerNotifier extends AsyncNotifier<FocusState> {
       _ticker?.cancel();
       state = AsyncData(current.copyWith(isRunning: false, lastUpdated: DateTime.now()));
     } else {
+      // Ensure we start from a clean state if remaining is 0
+      int remaining = current.remainingSeconds;
+      if (!current.isStopwatch && remaining <= 0) {
+        remaining = current.initialDuration;
+      }
+      
       _startTicker();
-      state = AsyncData(current.copyWith(isRunning: true, lastUpdated: DateTime.now()));
+      state = AsyncData(current.copyWith(
+        isRunning: true, 
+        remainingSeconds: remaining, // Reset if finished
+        lastUpdated: DateTime.now()
+      ));
     }
     _persist();
   }
