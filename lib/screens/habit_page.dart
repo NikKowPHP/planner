@@ -286,6 +286,7 @@ class _HabitPageState extends ConsumerState<HabitPage> {
     int selectedIconIndex = 0;
     int selectedColorIndex = 3; // default blue
     int goalValue = 1;
+    TimeOfDay? selectedTime; // New: for reminder
 
     await showDialog(
       context: context,
@@ -304,6 +305,7 @@ class _HabitPageState extends ConsumerState<HabitPage> {
                 // Name
                 TextField(
                   controller: nameController,
+                  autofocus: true,
                   style: const TextStyle(color: Colors.white),
                   decoration: InputDecoration(
                     hintText: 'Habit Name',
@@ -450,6 +452,43 @@ class _HabitPageState extends ConsumerState<HabitPage> {
                     ),
                   ],
                 ),
+                
+                // Reminder Section
+                const SizedBox(height: 20),
+                const Text('Daily Reminder', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: () async {
+                    final picked = await showTimePicker(
+                      context: context,
+                      initialTime: const TimeOfDay(hour: 9, minute: 0),
+                      builder: (context, child) => Theme(
+                        data: Theme.of(context).copyWith(colorScheme: const ColorScheme.dark(primary: GlassTheme.accentColor, surface: Color(0xFF1E1E1E))),
+                        child: child!,
+                      ),
+                    );
+                    if (picked != null) setDialogState(() => selectedTime = picked);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.white12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.alarm, color: Colors.white70, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          selectedTime != null ? selectedTime!.format(context) : 'No Reminder',
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -471,12 +510,22 @@ class _HabitPageState extends ConsumerState<HabitPage> {
                         '#${c.toARGB32().toRadixString(16).substring(2)}';
                     final iconCode = _kHabitIcons[selectedIconIndex].codePoint
                         .toString();
+                    
+                    // Format "HH:mm"
+                    String? reminderStr;
+                    if (selectedTime != null) {
+                      final h = selectedTime!.hour.toString().padLeft(2, '0');
+                      final m = selectedTime!.minute.toString().padLeft(2, '0');
+                      reminderStr = "$h:$m";
+                    }
+                    
                     await ref
                         .read(habitsProvider.notifier)
                         .createHabit(
                           nameController.text.trim(),
                           icon: iconCode,
                           color: colorHex,
+                          reminderTime: reminderStr,
                         );
                     if (ctx.mounted) Navigator.pop(ctx);
                   } catch (e, s) {

@@ -502,24 +502,31 @@ final habitsProvider = AsyncNotifierProvider<HabitsNotifier, List<Habit>>(
 class HabitsNotifier extends AsyncNotifier<List<Habit>> {
   @override
   Future<List<Habit>> build() async {
-    return ref.read(habitServiceProvider).getHabits();
+    final habits = await ref.read(habitServiceProvider).getHabits();
+    // Sync reminders on load
+    final notifier = NotificationService();
+    for (var h in habits) {
+      if (h.reminderTime != null && h.deletedAt == null) {
+        await notifier.scheduleHabitReminder(h);
+      }
+    }
+    return habits;
   }
 
-  Future<void> createHabit(String name, {String? icon, String? color}) async {
+  Future<void> createHabit(String name, {String? icon, String? color, String? reminderTime}) async {
     final logger = ref.read(loggerProvider);
     await logger.log('CRUD: Attempting to create Habit: $name');
     try {
       final newHabit = await ref
           .read(habitServiceProvider)
-          .createHabit(name, icon: icon, color: color);
+          .createHabit(name, icon: icon, color: color, reminderTime: reminderTime);
       state = AsyncData([...state.value ?? [], newHabit]);
       await logger.log('CRUD: Successfully created Habit ${newHabit.id}');
       
-      // Show notification
-      await NotificationService().showNotification(
-        title: "New Habit Added",
-        body: "Time to start building: $name",
-      );
+      // SCHEDULE reminder if set
+      if (newHabit.reminderTime != null) {
+        await NotificationService().scheduleHabitReminder(newHabit);
+      }
     } catch (e, s) {
       await logger.error('CRUD: Habit creation failed for $name', e, s);
       rethrow;
@@ -527,6 +534,8 @@ class HabitsNotifier extends AsyncNotifier<List<Habit>> {
   }
 
   Future<void> deleteHabit(String id) async {
+    // CANCEL reminder before deleting
+    await NotificationService().cancelReminder(id);
     await ref.read(habitServiceProvider).deleteHabit(id);
     state = AsyncData((state.value ?? []).where((h) => h.id != id).toList());
   }
@@ -537,6 +546,7 @@ class HabitsNotifier extends AsyncNotifier<List<Habit>> {
     String? icon,
     String? color,
     int? goalValue,
+    String? reminderTime,
   }) async {
     final updated = await ref
         .read(habitServiceProvider)
@@ -546,9 +556,17 @@ class HabitsNotifier extends AsyncNotifier<List<Habit>> {
           icon: icon,
           color: color,
           goalValue: goalValue,
+          reminderTime: reminderTime,
         );
     final current = state.value ?? [];
     state = AsyncData(current.map((h) => h.id == id ? updated : h).toList());
+    
+    // Reschedule reminder if updated
+    if (updated.reminderTime != null) {
+      await NotificationService().scheduleHabitReminder(updated);
+    } else {
+      await NotificationService().cancelReminder(id);
+    }
   }
 }
 

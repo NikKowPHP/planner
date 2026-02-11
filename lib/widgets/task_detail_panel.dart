@@ -213,9 +213,12 @@ class _TaskDetailPanelState extends State<TaskDetailPanel> {
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
-    final picked = await showDatePicker(
+    final initialDate = widget.task.dueDate ?? now;
+    
+    // 1. Pick Date
+    final date = await showDatePicker(
       context: context,
-      initialDate: widget.task.dueDate ?? now,
+      initialDate: initialDate,
       firstDate: DateTime(now.year - 1),
       lastDate: DateTime(now.year + 5),
       builder: (context, child) => Theme(
@@ -223,13 +226,54 @@ class _TaskDetailPanelState extends State<TaskDetailPanel> {
           colorScheme: const ColorScheme.dark(
             primary: GlassTheme.accentColor,
             surface: Color(0xFF1E1E1E),
+            onSurface: Colors.white,
           ),
         ),
         child: child!,
       ),
     );
-    if (picked != null) {
-      _handleUpdate(dueDate: picked);
+
+    if (date == null) return;
+
+    // 2. Pick Time
+    if (!mounted) return;
+    
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initialDate),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.dark(
+            primary: GlassTheme.accentColor,
+            surface: Color(0xFF1E1E1E),
+            onSurface: Colors.white,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+
+    if (time != null) {
+      final finalDate = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+      _handleUpdate(dueDate: finalDate);
+    } else {
+      // If cancelled time, just set to 9 AM
+      final finalDate = DateTime(date.year, date.month, date.day, 9, 0);
+      _handleUpdate(dueDate: finalDate);
+    }
+  }
+  // Update format to show time
+  String _formatDate(DateTime? date) {
+    if (date == null) return 'Date';
+    return '${date.day}/${date.month} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+  }
+
+  Color? _getPriorityColor(int priority) {
+    switch (priority) {
+      case 3: return Colors.redAccent;
+      case 2: return Colors.orangeAccent;
+      case 1: return Colors.blueAccent;
+      default: return null;
     }
   }
 
@@ -373,19 +417,6 @@ class _TaskDetailPanelState extends State<TaskDetailPanel> {
     ).animate().slideX(begin: 1, end: 0, duration: 300.ms, curve: Curves.easeOutQuint);
   }
 
-  String _formatDate(DateTime? date) {
-    if (date == null) return 'Date';
-    return '${date.day}/${date.month}';
-  }
-
-  Color? _getPriorityColor(int priority) {
-    switch (priority) {
-      case 3: return Colors.redAccent;
-      case 2: return Colors.orangeAccent;
-      case 1: return Colors.blueAccent;
-      default: return null;
-    }
-  }
 }
 
 class _HeaderButton extends StatelessWidget {

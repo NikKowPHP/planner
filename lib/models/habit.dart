@@ -7,6 +7,7 @@ class Habit {
   final int goalValue;
   final DateTime createdAt;
   final DateTime? deletedAt;
+  final String? reminderTime; // Format: "HH:mm"
 
   Habit({
     required this.id,
@@ -17,6 +18,7 @@ class Habit {
     this.goalValue = 1,
     required this.createdAt,
     this.deletedAt,
+    this.reminderTime, // New
   });
 
   factory Habit.fromJson(Map<String, dynamic> json) {
@@ -29,6 +31,7 @@ class Habit {
       goalValue: json['goal_value'] ?? 1,
       createdAt: DateTime.parse(json['created_at']),
       deletedAt: json['deleted_at'] != null ? DateTime.parse(json['deleted_at']) : null,
+      reminderTime: json['reminder_time'], // New
     );
   }
 }

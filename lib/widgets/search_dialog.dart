@@ -180,9 +180,7 @@ class _SearchDialogState extends ConsumerState<SearchDialog> {
                       ),
                       onChanged: (val) {
                         ref.read(homeViewProvider.notifier).setSearchQuery(val);
-                        setState(
-                          () => _selectedIndex = 0,
-                        ); // Reset selection on type
+                        setState(() => _selectedIndex = 0); // Ensure reset
                       },
                     ),
                   ),

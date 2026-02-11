@@ -130,12 +130,6 @@ class _HomePageState extends ConsumerState<HomePage> {
       child: Focus(
         focusNode: _mainFocusNode, // Use the managed FocusNode
         autofocus: true,
-        onFocusChange: (focused) {
-          if (!focused && !isSearchVisible) {
-            // Re-request focus if something else un-focuses the main listener
-            _mainFocusNode.requestFocus();
-          }
-        },
         child: Scaffold(
           key: _scaffoldKey, // Attach Key
           extendBody: true,

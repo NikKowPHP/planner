@@ -38,7 +38,7 @@ class HabitService {
     }
   }
 
-  Future<Habit> createHabit(String name, {String? icon, String? color}) async {
+  Future<Habit> createHabit(String name, {String? icon, String? color, String? reminderTime}) async {
     try {
       final user = _supabase.auth.currentUser!;
       final response = await _supabase.from('habits').insert({
@@ -46,6 +46,7 @@ class HabitService {
         'name': name,
         'icon': icon,
         'color': color,
+        'reminder_time': reminderTime,
       }).select().single();
       return Habit.fromJson(response);
     } catch (e, s) {
@@ -104,6 +105,7 @@ class HabitService {
     String? icon,
     String? color,
     int? goalValue,
+    String? reminderTime, // New
   }) async {
     try {
       final data = <String, dynamic>{};
@@ -111,6 +113,7 @@ class HabitService {
       if (icon != null) data['icon'] = icon;
       if (color != null) data['color'] = color;
       if (goalValue != null) data['goal_value'] = goalValue;
+      if (reminderTime != null) data['reminder_time'] = reminderTime; // New
 
       final response = await _supabase
           .from('habits')
