@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../providers/app_providers.dart';
+import '../providers/focus_provider.dart';
 import '../widgets/glass_card.dart';
 import '../theme/glass_theme.dart';
 import '../models/habit.dart';
@@ -94,6 +95,41 @@ class HabitPage extends ConsumerStatefulWidget {
 
 class _HabitPageState extends ConsumerState<HabitPage> {
   Habit? _selectedHabit;
+
+  void _showHabitContextMenu(Habit habit, Offset position) {
+    showMenu(
+      context: context,
+      position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx + 1, position.dy + 1),
+      color: const Color(0xFF1E1E1E),
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: Colors.white10),
+      ),
+      items: [
+        PopupMenuItem(
+          value: 'pomo',
+          child: Row(
+            children: [
+              const Icon(Icons.timer_outlined, color: GlassTheme.accentColor, size: 18),
+              const SizedBox(width: 12),
+              const Text('Start Pomodoro', style: TextStyle(color: Colors.white)),
+            ],
+          ),
+        ),
+      ],
+    ).then((value) {
+      if (value == 'pomo') {
+        final focusNotifier = ref.read(focusProvider.notifier);
+        // 1. Set the target
+        focusNotifier.setTarget(habit.id, 'habit');
+        // 2. Navigate to Focus Tab
+        ref.read(homeViewProvider.notifier).setActiveTab(AppTab.focus);
+        // 3. Start timer
+        focusNotifier.toggleTimer();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -222,6 +258,7 @@ class _HabitPageState extends ConsumerState<HabitPage> {
                       today: normalizedToday,
                       isSelected: _selectedHabit?.id == habit.id,
                       onTap: () => setState(() => _selectedHabit = habit),
+                      onContextMenu: (pos) => _showHabitContextMenu(habit, pos),
                       onToggle: () async {
                         FileLogger().log('GESTURE: Habit check-in toggled for "${habit.name}"');
                         try {
@@ -284,7 +321,7 @@ class _HabitPageState extends ConsumerState<HabitPage> {
   Future<void> _showAddHabitDialog(BuildContext context, WidgetRef ref) async {
     final nameController = TextEditingController();
     int selectedIconIndex = 0;
-    int selectedColorIndex = 3; // default blue
+    int selectedColorIndex = _kHabitColors.length ~/ 2; // default beige (dark-yellow)
     int goalValue = 1;
     TimeOfDay? selectedTime; // New: for reminder
 
@@ -612,6 +649,7 @@ class _HabitItem extends StatelessWidget {
   final bool isSelected;
   final VoidCallback onTap;
   final VoidCallback onToggle;
+  final Function(Offset) onContextMenu;
 
   const _HabitItem({
     required this.habit,
@@ -620,6 +658,7 @@ class _HabitItem extends StatelessWidget {
     required this.isSelected,
     required this.onTap,
     required this.onToggle,
+    required this.onContextMenu,
   });
 
   @override
@@ -632,6 +671,12 @@ class _HabitItem extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
+      onSecondaryTapUp: (details) {
+        onContextMenu(details.globalPosition);
+      },
+      onLongPressStart: (details) {
+        onContextMenu(details.globalPosition);
+      },
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -1245,6 +1290,7 @@ class _DailyGoalsChart extends StatelessWidget {
     // Find max for Y scale
     final maxVal = dayCount.values.fold(goalValue, max);
 
+
     return CustomPaint(
       size: const Size(double.infinity, 120),
       painter: _BarChartPainter(
@@ -1339,13 +1385,10 @@ class _BarChartPainter extends CustomPainter {
           text: TextSpan(text: '$day', style: textStyle),
           textDirection: ui.TextDirection.ltr,
         )..layout();
-        tp.paint(
-          canvas,
-          Offset(
+        tp.paint(canvas, Offset(
             x + barWidth / 2 - tp.width / 2,
             size.height - bottomPadding + 4,
-          ),
-        );
+        ));
       }
     }
   }
