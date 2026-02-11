@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/task.dart';
@@ -12,6 +13,7 @@ import '../services/focus_service.dart';
 import '../services/notification_service.dart';
 import '../models/page_model.dart';
 import '../services/page_service.dart';
+import '../models/content_match.dart';
 
 // --- Services ---
 
@@ -276,6 +278,14 @@ class HomeViewNotifier extends Notifier<HomeViewState> {
           selectedIndex: 4 + filters.length + index,
         );
       }
+    } else if (item is PageModel) {
+      // Navigate to Page (Title match)
+      state = state.copyWith(activeTab: AppTab.docs);
+      ref.read(selectedPageIdProvider.notifier).state = item.id;
+    } else if (item is ContentMatch) {
+      // Navigate to Page (Content match)
+      state = state.copyWith(activeTab: AppTab.docs);
+      ref.read(selectedPageIdProvider.notifier).state = item.page.id;
     }
   }
 }
@@ -621,10 +631,42 @@ final searchResultsProvider = Provider<Map<String, List<dynamic>>>((ref) {
   final habits = ref.watch(habitsProvider).value ?? [];
   final lists = ref.watch(listsProvider).value ?? [];
   final tags = ref.watch(tagsProvider).value ?? [];
+  final pages = ref.watch(pagesProvider).value ?? [];
 
   bool matches(String text) => text.toLowerCase().contains(query);
 
+  // Helper to extract context snippet
+  String getSnippet(String content) {
+    final idx = content.toLowerCase().indexOf(query);
+    if (idx == -1) return "";
+    
+    final start = max(0, idx - 20);
+    final end = min(content.length, idx + query.length + 40);
+    String snippet = content.substring(start, end).replaceAll('\n', ' ');
+    
+    if (start > 0) snippet = "...$snippet";
+    if (end < content.length) snippet = "$snippet...";
+    return snippet;
+  }
+
+  final pageMatches = <dynamic>[];
+  
+  for (final page in pages) {
+    // 1. Title Match
+    if (matches(page.title)) {
+      pageMatches.add(page);
+    } 
+    // 2. Content Match (if title didn't match, or separate entry)
+    else if (matches(page.content)) {
+      pageMatches.add(ContentMatch(
+        page: page, 
+        snippet: getSnippet(page.content)
+      ));
+    }
+  }
+
   return {
+    'Pages & Notes': pageMatches,
     'Tasks': tasks.where((t) => matches(t.title) || (t.description ?? '').toLowerCase().contains(query)).toList(),
     'Habits': habits.where((h) => matches(h.name)).toList(),
     'Lists': lists.where((l) => matches(l.name)).toList(),

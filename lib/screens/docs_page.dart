@@ -4,30 +4,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/app_providers.dart';
 import '../models/page_model.dart';
+import '../models/slash_command.dart';
 import '../theme/glass_theme.dart';
 import '../widgets/responsive_layout.dart';
+import '../widgets/docs/slash_menu.dart';
 import '../utils/markdown_controller.dart';
-
-// --- Slash Command Model ---
-class SlashCommand {
-  final String id;
-  final String label;
-  final String markdown;
-  final String description;
-  final IconData icon;
-  final int cursorOffset;
-  final bool isAction; // New: Distinguish between text insert vs function
-
-  const SlashCommand({
-    required this.id,
-    required this.label,
-    required this.markdown,
-    required this.description,
-    required this.icon,
-    this.cursorOffset = 0,
-    this.isAction = false,
-  });
-}
 
 class DocsPage extends ConsumerStatefulWidget {
   const DocsPage({super.key});
@@ -498,144 +479,11 @@ class _DocsPageState extends ConsumerState<DocsPage> {
                     left: 0,
                     width: 300,
                     height: 320,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1E1E1E),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.5),
-                            blurRadius: 30,
-                            spreadRadius: 5,
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            decoration: const BoxDecoration(
-                              border: Border(
-                                bottom: BorderSide(color: Colors.white10),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                const Text(
-                                  "Blocks",
-                                  style: TextStyle(
-                                    color: Colors.white54,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                const Spacer(),
-                                Text(
-                                  _slashQuery.isEmpty
-                                      ? "Type to filter"
-                                      : "'$_slashQuery'",
-                                  style: const TextStyle(
-                                    color: Colors.white30,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Expanded(
-                            child: _filteredCommands.isEmpty
-                                ? const Center(
-                                    child: Text(
-                                      "No commands found",
-                                      style: TextStyle(color: Colors.white38),
-                                    ),
-                                  )
-                                : ListView.builder(
-                                    padding: const EdgeInsets.all(6),
-                                    itemCount: _filteredCommands.length,
-                                    itemBuilder: (context, index) {
-                                      final cmd = _filteredCommands[index];
-                                      final isSelected =
-                                          index == _selectedMenuIndex;
-
-                                      return GestureDetector(
-                                        onTap: () => _executeCommand(cmd),
-                                        child: AnimatedContainer(
-                                          duration: const Duration(
-                                            milliseconds: 150,
-                                          ),
-                                          margin: const EdgeInsets.only(
-                                            bottom: 2,
-                                          ),
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 8,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: isSelected
-                                                ? GlassTheme.accentColor
-                                                      .withValues(alpha: 0.2)
-                                                : Colors.transparent,
-                                            borderRadius: BorderRadius.circular(
-                                              6,
-                                            ),
-                                          ),
-                                          child: Row(
-                                            children: [
-                                              Container(
-                                                width: 36,
-                                                height: 36,
-                                                decoration: BoxDecoration(
-                                                  color: Colors.white
-                                                      .withValues(alpha: 0.05),
-                                                  borderRadius:
-                                                      BorderRadius.circular(6),
-                                                  border: Border.all(
-                                                    color: Colors.white10,
-                                                  ),
-                                                ),
-                                                child: Icon(
-                                                  cmd.icon,
-                                                  size: 20,
-                                                  color: Colors.white,
-                                                ),
-                                              ),
-                                              const SizedBox(width: 12),
-                                              Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text(
-                                                      cmd.label,
-                                                      style: const TextStyle(
-                                                        color: Colors.white,
-                                                        fontSize: 14,
-                                                      ),
-                                                    ),
-                                                    Text(
-                                                      cmd.description,
-                                                      style: const TextStyle(
-                                                        color: Colors.white54,
-                                                        fontSize: 11,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                          ),
-                        ],
-                      ),
+                    child: SlashMenu(
+                      commands: _filteredCommands,
+                      selectedIndex: _selectedMenuIndex,
+                      query: _slashQuery,
+                      onCommandSelected: _executeCommand,
                     ),
                   ),
               ],
