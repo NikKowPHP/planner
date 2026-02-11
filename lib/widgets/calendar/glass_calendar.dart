@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter/services.dart'; // For Haptics
 import '../../models/task.dart';
 import '../../theme/glass_theme.dart';
 import '../../providers/app_providers.dart';
 import '../glass_card.dart';
+import 'day_details_sheet.dart'; // Import the new sheet
+import 'day_view.dart';
+
 
 class GlassCalendar extends ConsumerStatefulWidget {
   final Function(Task) onTaskTap;
@@ -18,7 +22,95 @@ class GlassCalendar extends ConsumerStatefulWidget {
 
 class _GlassCalendarState extends ConsumerState<GlassCalendar> {
   DateTime _focusedDay = DateTime.now();
+  
+  // Custom View State (instead of just CalendarFormat)
+  // 0 = Month, 1 = Week, 2 = Day
+  int _viewMode = 0; 
   CalendarFormat _calendarFormat = CalendarFormat.month;
+
+  void _setFormat(int mode) {
+    setState(() {
+      _viewMode = mode;
+      if (mode == 0) _calendarFormat = CalendarFormat.month;
+      if (mode == 1) _calendarFormat = CalendarFormat.week;
+      // mode 2 (Day) uses custom widget
+    });
+  }
+
+  // 1. Show Bottom Sheet on Tap
+  void _showDayDetails(DateTime date) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.7),
+      builder: (context) => FractionallySizedBox(
+        heightFactor: 0.75, // 75% height
+        child: DayDetailsSheet(date: date, onTaskTap: widget.onTaskTap),
+      ),
+    );
+  }
+
+  // 2. Show Quick Add Dialog on Long Press
+  Future<void> _showQuickAddDialog(DateTime date) async {
+    final controller = TextEditingController();
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Quick Add',
+              style: TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              DateFormat('MMM d').format(date),
+              style: const TextStyle(color: Colors.white),
+            ),
+          ],
+        ),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            hintText: "Task name",
+            hintStyle: const TextStyle(color: Colors.white38),
+            filled: true,
+            fillColor: Colors.white.withValues(alpha: 0.05),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide.none,
+            ),
+          ),
+          onSubmitted: (_) {
+            Navigator.pop(ctx, controller.text);
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: GlassTheme.accentColor,
+            ),
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    ).then((value) {
+      if (value != null && value.toString().isNotEmpty) {
+        ref.read(tasksProvider.notifier).createTask(value, dueDate: date);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,49 +122,71 @@ class _GlassCalendarState extends ConsumerState<GlassCalendar> {
           children: [
             _buildHeader(),
             Expanded(
-              child: TableCalendar<Task>(
-                firstDay: DateTime.utc(2020, 1, 1),
-                lastDay: DateTime.utc(2030, 12, 31),
-                focusedDay: _focusedDay,
-                calendarFormat: _calendarFormat,
-                startingDayOfWeek: StartingDayOfWeek.sunday,
-                
-                // Layout settings to look like a full grid
-                shouldFillViewport: true,
-                rowHeight: 120, // Taller rows for tasks
-                daysOfWeekHeight: 40,
+              child: _viewMode == 2
+                  ? DayView(
+                      focusedDay: _focusedDay,
+                      tasks: ref.watch(tasksProvider).asData?.value ?? [],
+                      onTaskTap: widget.onTaskTap,
+                    )
+                  : TableCalendar<Task>(
+                      firstDay: DateTime.utc(2020, 1, 1),
+                      lastDay: DateTime.utc(2030, 12, 31),
+                      focusedDay: _focusedDay,
+                      calendarFormat: _calendarFormat,
+                      startingDayOfWeek: StartingDayOfWeek.sunday,
+                      
+                      shouldFillViewport: true,
+                      rowHeight: 120, // Taller rows
+                      daysOfWeekHeight: 40,
+                      headerVisible: false,
 
-                headerVisible: false, // Using custom header
+                      onDaySelected: (selectedDay, focusedDay) {
+                        HapticFeedback.lightImpact();
+                        setState(() => _focusedDay = focusedDay);
+                        _showDayDetails(selectedDay);
+                      },
+                      onDayLongPressed: (selectedDay, focusedDay) {
+                        HapticFeedback.heavyImpact();
+                        setState(() => _focusedDay = focusedDay);
+                        _showQuickAddDialog(selectedDay);
+                      },
 
-                daysOfWeekStyle: const DaysOfWeekStyle(
-                  weekdayStyle: TextStyle(color: Colors.white38, fontSize: 12),
-                  weekendStyle: TextStyle(color: Colors.white38, fontSize: 12),
-                ),
-                
-                calendarBuilders: CalendarBuilders(
-                  defaultBuilder: (context, day, focusedDay) =>
-                      _buildCell(context, day, tasksMap, isToday: false),
-                  todayBuilder: (context, day, focusedDay) =>
-                      _buildCell(context, day, tasksMap, isToday: true),
-                  outsideBuilder: (context, day, focusedDay) =>
-                      _buildCell(context, day, tasksMap, isOutside: true),
-                  selectedBuilder: (context, day, focusedDay) => _buildCell(
-                    context,
-                    day,
-                    tasksMap,
-                    isToday: isSameDay(day, DateTime.now()),
-                  ),
-                ),
-                
-                onPageChanged: (focusedDay) {
-                  setState(() => _focusedDay = focusedDay);
-                },
-              ),
+                      daysOfWeekStyle: const DaysOfWeekStyle(
+                        weekdayStyle: TextStyle(
+                          color: Colors.white38,
+                          fontSize: 12,
+                        ),
+                        weekendStyle: TextStyle(
+                          color: Colors.white38,
+                          fontSize: 12,
+                        ),
+                      ),
+
+                      calendarBuilders: CalendarBuilders(
+                        defaultBuilder: (context, day, focusedDay) =>
+                            _buildCell(context, day, tasksMap, isToday: false),
+                        todayBuilder: (context, day, focusedDay) =>
+                            _buildCell(context, day, tasksMap, isToday: true),
+                        outsideBuilder: (context, day, focusedDay) =>
+                            _buildCell(context, day, tasksMap, isOutside: true),
+                        selectedBuilder: (context, day, focusedDay) =>
+                            _buildCell(
+                              context,
+                              day,
+                              tasksMap,
+                              isToday: false,
+                              isSelected: true,
+                            ),
+                      ),
+
+                      onPageChanged: (focusedDay) {
+                        setState(() => _focusedDay = focusedDay);
+                      },
+                    ),
             ),
           ],
         ),
         
-        // Floating Bottom Bar (View Switcher)
         Positioned(
           bottom: 24,
           left: 24,
@@ -84,39 +198,23 @@ class _GlassCalendarState extends ConsumerState<GlassCalendar> {
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
               borderRadius: 25,
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  _ViewSwitchButton(text: 'Year', isSelected: false),
+                  // Using index for view mode: 0=Month, 1=Week, 2=Day
                   _ViewSwitchButton(
                     text: 'Month',
-                    isSelected: _calendarFormat == CalendarFormat.month,
-                    onTap: () =>
-                        setState(() => _calendarFormat = CalendarFormat.month),
+                    isSelected: _viewMode == 0,
+                    onTap: () => _setFormat(0),
                   ),
                   _ViewSwitchButton(
                     text: 'Week',
-                    isSelected: _calendarFormat == CalendarFormat.week,
-                    onTap: () =>
-                        setState(() => _calendarFormat = CalendarFormat.week),
+                    isSelected: _viewMode == 1,
+                    onTap: () => _setFormat(1),
                   ),
-                  _ViewSwitchButton(text: 'Day', isSelected: false),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.orange,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Text(
-                      'Upgrade',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                  _ViewSwitchButton(
+                    text: 'Day',
+                    isSelected: _viewMode == 2,
+                    onTap: () => _setFormat(2),
                   ),
                 ],
               ),
@@ -153,10 +251,17 @@ class _GlassCalendarState extends ConsumerState<GlassCalendar> {
                 icon: const Icon(Icons.chevron_left, color: Colors.white70),
                 onPressed: () {
                   setState(() {
-                    _focusedDay = DateTime(
-                      _focusedDay.year,
-                      _focusedDay.month - 1,
-                    );
+                    // Adjust based on view mode? For now just month increment is fine or day
+                    if (_viewMode == 2) {
+                      _focusedDay = _focusedDay.subtract(
+                        const Duration(days: 1),
+                      );
+                    } else {
+                      _focusedDay = DateTime(
+                        _focusedDay.year,
+                        _focusedDay.month - 1,
+                      );
+                    }
                   });
                 },
               ),
@@ -177,10 +282,14 @@ class _GlassCalendarState extends ConsumerState<GlassCalendar> {
                 icon: const Icon(Icons.chevron_right, color: Colors.white70),
                 onPressed: () {
                   setState(() {
-                    _focusedDay = DateTime(
-                      _focusedDay.year,
-                      _focusedDay.month + 1,
-                    );
+                    if (_viewMode == 2) {
+                      _focusedDay = _focusedDay.add(const Duration(days: 1));
+                    } else {
+                      _focusedDay = DateTime(
+                        _focusedDay.year,
+                        _focusedDay.month + 1,
+                      );
+                    }
                   });
                 },
               ),
@@ -191,31 +300,36 @@ class _GlassCalendarState extends ConsumerState<GlassCalendar> {
     );
   }
 
+
   Widget _buildCell(
     BuildContext context,
     DateTime day,
     Map<DateTime, List<Task>> tasksMap, {
     bool isToday = false,
     bool isOutside = false,
+    bool isSelected = false,
   }) {
     final normalized = DateTime(day.year, day.month, day.day);
     final tasks = tasksMap[normalized] ?? [];
 
+    // Wrap content in a transparent container to ensure the whole cell is tapable via TableCalendar
     return Container(
       decoration: BoxDecoration(
         border: Border(
           top: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
           right: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
         ),
-        color: isOutside
-            ? Colors.transparent
-            : Colors.white.withValues(alpha: 0.01),
+        color: isSelected
+            ? GlassTheme.accentColor.withValues(alpha: 0.1)
+            : (isOutside
+                  ? Colors.transparent
+                  : Colors.white.withValues(alpha: 0.01)),
       ),
       padding: const EdgeInsets.all(4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Day Number Highlight
+          // Day Number
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -245,11 +359,9 @@ class _GlassCalendarState extends ConsumerState<GlassCalendar> {
           // Tasks List
           Expanded(
             child: ListView.builder(
-              physics:
-                  const NeverScrollableScrollPhysics(), // Provide interaction in details view instead
+              physics: const NeverScrollableScrollPhysics(), 
               itemCount: tasks.length,
               itemBuilder: (context, index) {
-                // Show max 4 tasks per cell to avoid clutter
                 if (index > 3) return const SizedBox.shrink();
                 if (index == 3) {
                   return Padding(
@@ -287,26 +399,28 @@ class _CalendarTaskItem extends StatelessWidget {
     final color = _getTaskColor(task);
     
     return GestureDetector(
-      onTap: () => onTap(task),
+      onTap: () {
+        HapticFeedback.selectionClick(); // Add haptic here too
+        onTap(task);
+      },
       child: Container(
         margin: const EdgeInsets.only(bottom: 2),
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.2),
-          borderRadius: BorderRadius.circular(4),
-          border: Border(left: BorderSide(color: color, width: 3)),
+          borderRadius: BorderRadius.circular(3),
+          border: Border(left: BorderSide(color: color, width: 2)),
         ),
         child: Row(
           children: [
-            // Tiny checkbox visual
             if (!task.isCompleted)
               Container(
-                margin: const EdgeInsets.only(right: 4),
-                width: 8,
-                height: 8,
+                margin: const EdgeInsets.only(right: 2),
+                width: 4,
+                height: 4, 
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.white54, width: 1),
-                  borderRadius: BorderRadius.circular(2),
+                  border: Border.all(color: Colors.white54, width: 0.5),
+                  borderRadius: BorderRadius.circular(1),
                 ),
               ),
             Expanded(
@@ -314,20 +428,16 @@ class _CalendarTaskItem extends StatelessWidget {
                 task.title,
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.9),
-                  fontSize: 10,
+                  fontSize: 9,
                   decoration: task.isCompleted
                       ? TextDecoration.lineThrough
                       : null,
+                  height: 1.1,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            if (task.dueDate != null)
-              Text(
-                DateFormat('HH:mm').format(task.dueDate!),
-                style: const TextStyle(color: Colors.white38, fontSize: 8),
-              ),
           ],
         ),
       ),
@@ -338,18 +448,17 @@ class _CalendarTaskItem extends StatelessWidget {
     if (task.isCompleted) return Colors.grey;
     switch (task.priority) {
       case 3:
-        return const Color(0xFFFF6B6B); // Red
+        return const Color(0xFFFF6B6B);
       case 2:
-        return const Color(0xFFFECA57); // Yellow
+        return const Color(0xFFFECA57);
       case 1:
-        return const Color(0xFF48DBFB); // Blue
-      default:
-        // Generate a deterministic pastel color based on hash if no priority
+        return const Color(0xFF48DBFB);
+      default: 
         final colors = [
-          const Color(0xFF10AC84), // Teal
-          const Color(0xFF5F27CD), // Purple
-          const Color(0xFFFF9F43), // Orange
-          const Color(0xFF54A0FF), // Blue
+          const Color(0xFF10AC84),
+          const Color(0xFF5F27CD),
+          const Color(0xFFFF9F43),
+          const Color(0xFF54A0FF),
         ];
         return colors[task.title.hashCode % colors.length];
     }
@@ -370,7 +479,12 @@ class _ViewSwitchButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        if (onTap != null) {
+          HapticFeedback.selectionClick();
+          onTap!();
+        }
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
