@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../widgets/liquid_background.dart';
 import '../widgets/glass_card.dart';
@@ -9,6 +10,7 @@ import '../widgets/task_list_group.dart';
 import '../widgets/filter_editor_dialog.dart';
 import '../widgets/task_detail_panel.dart';
 import '../widgets/home/home_app_bar.dart';
+import '../widgets/search_dialog.dart';
 import '../providers/app_providers.dart';
 import '../models/task.dart';
 import '../models/custom_filter.dart';
@@ -46,6 +48,8 @@ class _HomePageState extends ConsumerState<HomePage> {
     final activeTab = ref.watch(homeViewProvider.select((s) => s.activeTab));
     final selectedIndex = ref.watch(homeViewProvider.select((s) => s.selectedIndex));
     final selectedTask = ref.watch(homeViewProvider.select((s) => s.selectedTask));
+    final isSidebarVisible = ref.watch(homeViewProvider.select((s) => s.isSidebarVisible));
+    final isSearchVisible = ref.watch(homeViewProvider.select((s) => s.isSearchVisible));
     final notifier = ref.read(homeViewProvider.notifier);
     final tasksNotifier = ref.read(tasksProvider.notifier);
 
@@ -75,28 +79,33 @@ class _HomePageState extends ConsumerState<HomePage> {
       },
     );
 
-    return Scaffold(
-      key: _scaffoldKey, // Attach Key
-      extendBody: true,
-      // Only show Drawer on mobile and when on Tasks tab
-      drawer: (!isDesktop && activeTab == AppTab.tasks) 
-          ? Drawer(
-              backgroundColor: const Color(0xFF0F0F0F),
-              width: 300,
-              child: Column(
-                children: [
-                  _buildDrawerHeader(ref),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      child: sidebar,
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.keyF, control: true): () => notifier.toggleSearch(),
+        const SingleActivator(LogicalKeyboardKey.keyF, meta: true): () => notifier.toggleSearch(),
+      },
+      child: Scaffold(
+        key: _scaffoldKey, // Attach Key
+        extendBody: true,
+        // Only show Drawer on mobile and when on Tasks tab
+        drawer: (!isDesktop && activeTab == AppTab.tasks)
+            ? Drawer(
+                backgroundColor: const Color(0xFF0F0F0F),
+                width: 300,
+                child: Column(
+                  children: [
+                    _buildDrawerHeader(ref),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        child: sidebar,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ) 
-          : null,
-      body: Stack(
+                  ],
+                ),
+              )
+            : null,
+        body: Stack(
         children: [
           const LiquidBackground(),
           if (isDesktop)
@@ -110,7 +119,19 @@ class _HomePageState extends ConsumerState<HomePage> {
 
                 // 2. Context Sidebar (Tasks only)
                 if (activeTab == AppTab.tasks)
-                  sidebar, // Use the reusable sidebar instance
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                    width: isSidebarVisible ? (isDesktop ? 250 : 0) : 0,
+                    child: ClipRect(
+                      child: OverflowBox(
+                        minWidth: 250,
+                        maxWidth: 250,
+                        alignment: Alignment.centerLeft,
+                        child: isSidebarVisible ? sidebar : const SizedBox.shrink(),
+                      ),
+                    ),
+                  ),
 
                 // 3. Main Content
                 Expanded(
@@ -153,7 +174,16 @@ class _HomePageState extends ConsumerState<HomePage> {
                 ),
               ],
             ),
+          
+          if (isSearchVisible) ...[
+            GestureDetector(
+              onTap: () => notifier.toggleSearch(),
+              child: Container(color: Colors.black54),
+            ),
+            const SearchDialog(),
+          ],
         ],
+        ),
       ),
     );
   }
@@ -223,10 +253,10 @@ class _HomePageState extends ConsumerState<HomePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           HomeAppBar(
-            // Only enable drawer menu on Mobile + Tasks tab
+            // Handle both Mobile (Drawer) and Desktop (Sidebar Toggle)
             onMenuPressed: isMobile
                 ? () => _scaffoldKey.currentState?.openDrawer()
-                : null,
+                : () => ref.read(homeViewProvider.notifier).toggleSidebar(),
           ),
           const SizedBox(height: 24),
           GlassCard(
@@ -524,6 +554,7 @@ class _HomePageState extends ConsumerState<HomePage> {
         context: context,
         position: RelativeRect.fromLTRB(pos.dx, pos.dy, pos.dx+1, pos.dy+1),
         color: const Color(0xFF1E1E1E),
+        surfaceTintColor: Colors.transparent, // Add this to prevent M3 transparency issues
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Colors.white10)),
         items: TaskContextMenu.buildItems(
            context: context,

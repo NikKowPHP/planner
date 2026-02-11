@@ -31,6 +31,17 @@ class AppTheme {
         surface: Colors.transparent, // Important for glass
       ),
 
+      // Popup Menu Theme - global defaults
+      popupMenuTheme: PopupMenuThemeData(
+        color: const Color(0xFF1E1E1E),
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: const BorderSide(color: Colors.white10),
+        ),
+        textStyle: const TextStyle(color: Colors.white),
+      ),
+
       useMaterial3: true,
     );
   }

@@ -250,12 +250,15 @@ class _SectionHeader extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              color: Colors.white38,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(
+                color: Colors.white38,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
           InkWell(
@@ -319,12 +322,17 @@ class _SidebarItem extends StatelessWidget {
                   fontSize: 14,
                   fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                 ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
             ),
             if (count != null)
-              Text(
-                count.toString(),
-                style: const TextStyle(color: Colors.white24, fontSize: 12),
+              Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: Text(
+                  count.toString(),
+                  style: const TextStyle(color: Colors.white24, fontSize: 12),
+                ),
               ),
           ],
         ),

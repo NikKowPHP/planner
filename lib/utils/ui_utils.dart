@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:io'; // Add import
-import 'dart:ui';
-import 'package:flutter/foundation.dart' show kIsWeb;
 
 class UIUtils {
   static void configureSystemUI() {

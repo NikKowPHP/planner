@@ -80,6 +80,7 @@ class _DayDetailsSheetState extends ConsumerState<DayDetailsSheet> {
       context: context,
       position: RelativeRect.fromLTRB(pos.dx, pos.dy, pos.dx + 1, pos.dy + 1),
       color: const Color(0xFF1E1E1E),
+      surfaceTintColor: Colors.transparent, // Add this to prevent M3 transparency issues
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Colors.white10)),
       items: TaskContextMenu.buildItems(
         context: context,

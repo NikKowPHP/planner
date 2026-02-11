@@ -14,13 +14,13 @@ void main() async {
   // Initialize Supabase
   await SupabaseConfig.initialize();
   
-  // Initialize Notification Service
-  await NotificationService().init();
+  // Create ProviderContainer for service access
+  final container = ProviderContainer();
+  
+  // Initialize Notification Service with container for tap handling
+  await NotificationService().init(container);
   
   UIUtils.configureSystemUI();
-  
-  // NEW CODE: Create ProviderContainer for SystemTrayService access
-  final container = ProviderContainer();
   
   // Initialize System Tray / Window Manager for Desktop
   await SystemTrayService().init(container);

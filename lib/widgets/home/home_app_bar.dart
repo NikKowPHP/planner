@@ -36,6 +36,10 @@ class HomeAppBar extends ConsumerWidget {
         ),
         Row(
           children: [
+            IconButton(
+              icon: const Icon(Icons.search, color: Colors.white),
+              onPressed: () => ref.read(homeViewProvider.notifier).toggleSearch(),
+            ),
             if (isLoading)
               const Padding(
                 padding: EdgeInsets.only(right: 16),
@@ -61,18 +65,7 @@ class HomeAppBar extends ConsumerWidget {
     final currentSort = ref.watch(homeViewProvider.select((s) => s.sortBy));
     final notifier = ref.read(homeViewProvider.notifier);
 
-    return Theme(
-      data: Theme.of(context).copyWith(
-        cardColor: const Color(0xFF1E1E1E),
-        popupMenuTheme: PopupMenuThemeData(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: const BorderSide(color: Colors.white10),
-          ),
-          textStyle: const TextStyle(color: Colors.white),
-        ),
-      ),
-      child: PopupMenuButton<dynamic>(
+    return PopupMenuButton<dynamic>(
         icon: const Icon(Icons.swap_vert, color: Colors.white),
         tooltip: 'Sort & Group',
         itemBuilder: (context) => [
@@ -115,8 +108,7 @@ class HomeAppBar extends ConsumerWidget {
             () => notifier.setSortBy(SortBy.title),
           ),
         ],
-      ),
-    );
+      );
   }
 
   Widget _buildViewMenu(BuildContext context, WidgetRef ref) {
@@ -124,18 +116,7 @@ class HomeAppBar extends ConsumerWidget {
       homeViewProvider.select((s) => s.hideCompleted),
     );
     
-    return Theme(
-      data: Theme.of(context).copyWith(
-        cardColor: const Color(0xFF1E1E1E),
-        popupMenuTheme: PopupMenuThemeData(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: const BorderSide(color: Colors.white10),
-          ),
-          textStyle: const TextStyle(color: Colors.white),
-        ),
-      ),
-      child: PopupMenuButton<dynamic>(
+    return PopupMenuButton<dynamic>(
         icon: const Icon(Icons.more_horiz, color: Colors.white),
         itemBuilder: (context) => [
           CheckedPopupMenuItem(
@@ -146,8 +127,7 @@ class HomeAppBar extends ConsumerWidget {
                 ref.read(homeViewProvider.notifier).toggleHideCompleted(),
           ),
         ],
-      ),
-    );
+      );
   }
 
   PopupMenuItem _buildRadioItem(String text, bool selected, VoidCallback onTap) {

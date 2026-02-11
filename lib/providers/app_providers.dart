@@ -40,7 +40,23 @@ final userProfileProvider = FutureProvider((ref) async {
 class TasksNotifier extends AsyncNotifier<List<Task>> {
   @override
   Future<List<Task>> build() async {
-    return ref.read(todoServiceProvider).getTasks();
+    final tasks = await ref.read(todoServiceProvider).getTasks();
+    
+    // NEW: Automatically sync all reminders on app launch/refresh
+    _syncAllReminders(tasks);
+    
+    return tasks;
+  }
+
+  Future<void> _syncAllReminders(List<Task> tasks) async {
+    final notifier = NotificationService();
+    for (final task in tasks) {
+      if (task.dueDate != null && !task.isCompleted && task.deletedAt == null) {
+        await notifier.scheduleTaskReminder(task);
+      } else {
+        await notifier.cancelTaskReminder(task.id);
+      }
+    }
   }
 
   Future<void> createTask(String title, {String? listId, DateTime? dueDate}) async {
@@ -55,11 +71,10 @@ class TasksNotifier extends AsyncNotifier<List<Task>> {
       state = AsyncData([newTask, ...current]);
       await logger.log('TasksProvider: Created task ${newTask.id}');
       
-      // Show notification
-      await NotificationService().showNotification(
-        title: "Task Created",
-        body: "New task: $title",
-      );
+      // NEW: Schedule notification if due date exists
+      if (newTask.dueDate != null) {
+        await NotificationService().scheduleTaskReminder(newTask);
+      }
     } catch (e, s) {
       await logger.error('TasksProvider: Create failed', e, s);
       rethrow;
@@ -86,12 +101,14 @@ class TasksNotifier extends AsyncNotifier<List<Task>> {
         'CRUD: Successfully updated Task ${task.id} in database',
       );
       
-      // Show notification if task is completed
-      if (task.isCompleted) {
-        await NotificationService().showNotification(
-          title: "Task Completed",
-          body: "Great job finishing: ${task.title}",
-        );
+      // NEW: Update Scheduling logic
+      if (task.isCompleted || task.deletedAt != null) {
+        await NotificationService().cancelTaskReminder(task.id);
+      } else if (task.dueDate != null) {
+        // Rescheduling will overwrite the previous one because we use the same ID
+        await NotificationService().scheduleTaskReminder(task);
+      } else {
+        await NotificationService().cancelTaskReminder(task.id);
       }
     } catch (e, s) {
       await logger.error('CRUD: Failed to update Task ${task.id}', e, s);
@@ -118,6 +135,8 @@ class TasksNotifier extends AsyncNotifier<List<Task>> {
        }).toList();
        state = AsyncData(updatedList);
 
+       // NEW: Cancel notification when task is deleted
+       await NotificationService().cancelTaskReminder(task.id);
        await ref.read(todoServiceProvider).deleteTask(task.id);
        await logger.log('TasksProvider: Deleted task ${task.id}');
     } catch (e, s) {
@@ -151,6 +170,9 @@ class HomeViewState {
   final SortBy sortBy;
   final bool hideCompleted;
   final Task? selectedTask;
+  final bool isSidebarVisible;
+  final bool isSearchVisible;
+  final String searchQuery;
 
   HomeViewState({
     this.activeTab = AppTab.tasks,
@@ -159,6 +181,9 @@ class HomeViewState {
     this.sortBy = SortBy.date,
     this.hideCompleted = false,
     this.selectedTask,
+    this.isSidebarVisible = true,
+    this.isSearchVisible = false,
+    this.searchQuery = '',
   });
 
   HomeViewState copyWith({
@@ -169,6 +194,9 @@ class HomeViewState {
     bool? hideCompleted,
     Task? selectedTask,
     bool nullSelectedTask = false,
+    bool? isSidebarVisible,
+    bool? isSearchVisible,
+    String? searchQuery,
   }) {
     return HomeViewState(
       activeTab: activeTab ?? this.activeTab,
@@ -177,6 +205,9 @@ class HomeViewState {
       sortBy: sortBy ?? this.sortBy,
       hideCompleted: hideCompleted ?? this.hideCompleted,
       selectedTask: nullSelectedTask ? null : (selectedTask ?? this.selectedTask),
+      isSidebarVisible: isSidebarVisible ?? this.isSidebarVisible,
+      isSearchVisible: isSearchVisible ?? this.isSearchVisible,
+      searchQuery: searchQuery ?? this.searchQuery,
     );
   }
 }
@@ -198,6 +229,9 @@ class HomeViewNotifier extends Notifier<HomeViewState> {
   void setSortBy(SortBy sort) => state = state.copyWith(sortBy: sort);
   void toggleHideCompleted() => state = state.copyWith(hideCompleted: !state.hideCompleted);
   void selectTask(Task? task) => state = state.copyWith(selectedTask: task, nullSelectedTask: task == null);
+  void toggleSidebar() => state = state.copyWith(isSidebarVisible: !state.isSidebarVisible);
+  void toggleSearch() => state = state.copyWith(isSearchVisible: !state.isSearchVisible, searchQuery: '');
+  void setSearchQuery(String query) => state = state.copyWith(searchQuery: query);
 }
 
 final homeViewProvider = NotifierProvider<HomeViewNotifier, HomeViewState>(HomeViewNotifier.new);
@@ -516,12 +550,38 @@ final focusHistoryProvider = FutureProvider<List<FocusSession>>((ref) async {
 // Helper to refresh history after saving
 final focusSessionSaverProvider = Provider((ref) {
   return ({required DateTime startTime, required int duration, String? taskId, String? habitId}) async {
-    await ref.read(focusServiceProvider).saveSession(
-      startTime: startTime,
-      durationSeconds: duration,
-      taskId: taskId,
-      habitId: habitId,
-    );
-    ref.invalidate(focusHistoryProvider);
+    try {
+      await ref.read(focusServiceProvider).saveSession(
+        startTime: startTime,
+        durationSeconds: duration,
+        taskId: taskId,
+        habitId: habitId,
+      );
+      ref.invalidate(focusHistoryProvider);
+    } catch (e, s) {
+      await ref.read(loggerProvider).error('focusSessionSaverProvider: Save failed', e, s);
+      rethrow;
+    }
   };
+});
+
+// --- Search Provider ---
+
+final searchResultsProvider = Provider<Map<String, List<dynamic>>>((ref) {
+  final query = ref.watch(homeViewProvider.select((s) => s.searchQuery)).toLowerCase();
+  if (query.isEmpty) return {};
+
+  final tasks = ref.watch(tasksProvider).value ?? [];
+  final habits = ref.watch(habitsProvider).value ?? [];
+  final lists = ref.watch(listsProvider).value ?? [];
+  final tags = ref.watch(tagsProvider).value ?? [];
+
+  bool matches(String text) => text.toLowerCase().contains(query);
+
+  return {
+    'Tasks': tasks.where((t) => matches(t.title) || (t.description ?? '').toLowerCase().contains(query)).toList(),
+    'Habits': habits.where((h) => matches(h.name)).toList(),
+    'Lists': lists.where((l) => matches(l.name)).toList(),
+    'Tags': tags.where((tag) => matches(tag.name)).toList(),
+  }..removeWhere((key, value) => value.isEmpty);
 });

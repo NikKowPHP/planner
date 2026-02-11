@@ -272,27 +272,35 @@ class _FocusPageState extends ConsumerState<FocusPage> {
   }
 
   Future<void> _handleSessionComplete(FocusState state, dynamic selectedTarget) async {
-     final duration = state.isStopwatch ? state.remainingSeconds : state.initialDuration;
-     
-     String? taskId;
-     String? habitId;
-     if (selectedTarget is Task) taskId = selectedTarget.id;
-     if (selectedTarget is Habit) habitId = selectedTarget.id;
+    try {
+      final duration = state.isStopwatch ? state.remainingSeconds : state.initialDuration;
+      
+      String? taskId;
+      String? habitId;
+      if (selectedTarget is Task) taskId = selectedTarget.id;
+      if (selectedTarget is Habit) habitId = selectedTarget.id;
 
-     await ref.read(focusSessionSaverProvider)(
+      await ref.read(focusSessionSaverProvider)(
         startTime: DateTime.now().subtract(Duration(seconds: duration)),
         duration: duration,
         taskId: taskId,
         habitId: habitId,
-     );
-     
-     ref.read(focusProvider.notifier).reset();
-     
-     if (mounted) {
-       ScaffoldMessenger.of(context).showSnackBar(
-         const SnackBar(content: Text("Session Saved!")),
-       );
-     }
+      );
+      
+      ref.read(focusProvider.notifier).reset();
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Session Saved!")),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to save session: $e")),
+        );
+      }
+    }
   }
 
   String _formatTime(int totalSeconds) {
