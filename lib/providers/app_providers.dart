@@ -8,6 +8,7 @@ import '../models/habit.dart';
 import '../services/habit_service.dart';
 import '../models/focus_session.dart';
 import '../services/focus_service.dart';
+import '../services/notification_service.dart';
 
 // --- Services ---
 
@@ -53,6 +54,12 @@ class TasksNotifier extends AsyncNotifier<List<Task>> {
       final current = state.value ?? [];
       state = AsyncData([newTask, ...current]);
       await logger.log('TasksProvider: Created task ${newTask.id}');
+      
+      // Show notification
+      await NotificationService().showNotification(
+        title: "Task Created",
+        body: "New task: $title",
+      );
     } catch (e, s) {
       await logger.error('TasksProvider: Create failed', e, s);
       rethrow;
@@ -78,6 +85,14 @@ class TasksNotifier extends AsyncNotifier<List<Task>> {
       await logger.log(
         'CRUD: Successfully updated Task ${task.id} in database',
       );
+      
+      // Show notification if task is completed
+      if (task.isCompleted) {
+        await NotificationService().showNotification(
+          title: "Task Completed",
+          body: "Great job finishing: ${task.title}",
+        );
+      }
     } catch (e, s) {
       await logger.error('CRUD: Failed to update Task ${task.id}', e, s);
       ref.invalidateSelf(); // Rollback state on failure
@@ -409,6 +424,12 @@ class HabitsNotifier extends AsyncNotifier<List<Habit>> {
           .createHabit(name, icon: icon, color: color);
       state = AsyncData([...state.value ?? [], newHabit]);
       await logger.log('CRUD: Successfully created Habit ${newHabit.id}');
+      
+      // Show notification
+      await NotificationService().showNotification(
+        title: "New Habit Added",
+        body: "Time to start building: $name",
+      );
     } catch (e, s) {
       await logger.error('CRUD: Habit creation failed for $name', e, s);
       rethrow;
@@ -470,6 +491,16 @@ final habitLogsProvider = FutureProvider<Map<String, List<DateTime>>>((
 final habitToggleProvider = Provider((ref) {
   return (String habitId, DateTime date) async {
     await ref.read(habitServiceProvider).toggleHabitForDate(habitId, date);
+    
+    // Find habit name for notification
+    final habit = ref.read(habitsProvider).value?.firstWhere((h) => h.id == habitId);
+    if (habit != null) {
+      await NotificationService().showNotification(
+        title: "Habit Logged",
+        body: "You checked in for: ${habit.name}",
+      );
+    }
+    
     ref.invalidate(habitLogsProvider); // Refresh logs
   };
 });

@@ -6,12 +6,16 @@ import 'utils/ui_utils.dart';
 import 'config/supabase_config.dart';
 import 'middleware/auth_guard.dart';
 import 'services/system_tray_service.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   // Initialize Supabase
   await SupabaseConfig.initialize();
+  
+  // Initialize Notification Service
+  await NotificationService().init();
   
   UIUtils.configureSystemUI();
   
