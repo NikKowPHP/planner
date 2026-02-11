@@ -168,36 +168,18 @@ class _HomePageState extends ConsumerState<HomePage> {
 
                 // 2. Context Sidebar (Tasks only)
                 if (activeTab == AppTab.tasks)
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOut,
-                    width: isSidebarVisible ? (isDesktop ? 250 : 0) : 0,
-                    child: ClipRect(
-                      child: OverflowBox(
-                        minWidth: 250,
-                        maxWidth: 250,
-                        alignment: Alignment.centerLeft,
-                        child: isSidebarVisible ? sidebar : const SizedBox.shrink(),
-                      ),
-                    ),
+                      _AnimatedSidebarSlot(
+                        visible: isSidebarVisible,
+                        width: 250,
+                        child: sidebar,
                   ),
                 
                 // NEW: Docs Sidebar
                 if (activeTab == AppTab.docs)
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOut,
-                    width: isSidebarVisible ? (isDesktop ? 250 : 0) : 0,
-                    child: ClipRect(
-                      child: OverflowBox(
-                        minWidth: 250,
-                        maxWidth: 250,
-                        alignment: Alignment.centerLeft,
-                        child: isSidebarVisible 
-                            ? DocsSidebar(width: 250) 
-                            : const SizedBox.shrink(),
-                      ),
-                    ),
+                      _AnimatedSidebarSlot(
+                        visible: isSidebarVisible,
+                        width: 250,
+                        child: DocsSidebar(width: 250),
                   ),
 
                 // 3. Main Content
@@ -277,6 +259,7 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   Widget _buildBodyContent(AppTab activeTab, WidgetRef ref) {
     final isMobile = ResponsiveLayout.isMobile(context);
+    final isDesktop = ResponsiveLayout.isDesktop(context);
     
     switch (activeTab) {
       case AppTab.calendar:
@@ -300,7 +283,21 @@ class _HomePageState extends ConsumerState<HomePage> {
       case AppTab.focus:
         return const FocusPage();
       case AppTab.docs:
-        return const DocsPage();
+        return Padding(
+          padding: EdgeInsets.fromLTRB(24, 24, 24, isMobile ? 100 : 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              HomeAppBar(
+                onMenuPressed: !isDesktop
+                    ? () => _scaffoldKey.currentState?.openDrawer()
+                    : () => ref.read(homeViewProvider.notifier).toggleSidebar(),
+              ),
+              const SizedBox(height: 24),
+              const Expanded(child: DocsPage()),
+            ],
+          ),
+        );
       case AppTab.habit:
         return const HabitPage();
       case AppTab.tasks:
@@ -311,6 +308,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   Widget _buildTaskContent(WidgetRef ref) {
     final groupedTasks = ref.watch(groupedTasksProvider);
     final isMobile = ResponsiveLayout.isMobile(context);
+    final isDesktop = ResponsiveLayout.isDesktop(context);
 
     return Padding(
       padding: EdgeInsets.fromLTRB(24, 24, 24, isMobile ? 100 : 24),
@@ -318,8 +316,8 @@ class _HomePageState extends ConsumerState<HomePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           HomeAppBar(
-            // Handle both Mobile (Drawer) and Desktop (Sidebar Toggle)
-            onMenuPressed: isMobile
+            // Handle both Mobile/Tablet (Drawer) and Desktop (Sidebar Toggle)
+            onMenuPressed: !isDesktop
                 ? () => _scaffoldKey.currentState?.openDrawer()
                 : () => ref.read(homeViewProvider.notifier).toggleSidebar(),
           ),
@@ -722,6 +720,94 @@ class _HomePageState extends ConsumerState<HomePage> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Animated sidebar slot that slides in/out with a smooth transition.
+class _AnimatedSidebarSlot extends StatefulWidget {
+  final bool visible;
+  final double width;
+  final Widget child;
+
+  const _AnimatedSidebarSlot({
+    required this.visible,
+    required this.width,
+    required this.child,
+  });
+
+  @override
+  State<_AnimatedSidebarSlot> createState() => _AnimatedSidebarSlotState();
+}
+
+class _AnimatedSidebarSlotState extends State<_AnimatedSidebarSlot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _widthAnimation;
+  late final Animation<double> _slideAnimation;
+  late final Animation<double> _fadeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+      value: widget.visible ? 1.0 : 0.0,
+    );
+    _widthAnimation = Tween<double>(
+      begin: 0,
+      end: widget.width,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+    _slideAnimation = Tween<double>(
+      begin: -1.0,
+      end: 0.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+  }
+
+  @override
+  void didUpdateWidget(covariant _AnimatedSidebarSlot oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.visible != oldWidget.visible) {
+      if (widget.visible) {
+        _controller.forward();
+      } else {
+        _controller.reverse();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return SizedBox(
+          width: _widthAnimation.value,
+          child: ClipRect(
+            child: OverflowBox(
+              minWidth: widget.width,
+              maxWidth: widget.width,
+              alignment: Alignment.centerLeft,
+              child: FractionalTranslation(
+                translation: Offset(_slideAnimation.value, 0),
+                child: Opacity(opacity: _fadeAnimation.value, child: child),
+              ),
+            ),
+          ),
+        );
+      },
+      child: widget.child,
     );
   }
 }

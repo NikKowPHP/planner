@@ -22,40 +22,50 @@ class GlassNavigationBar extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 24, left: 16, right: 16),
         child: GlassCard(
           height: 70,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           borderRadius: 35,
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _NavBarItem(
-                icon: Icons.check_circle_outline,
-                label: 'Tasks',
-                isSelected: currentTab == AppTab.tasks,
-                onTap: () => onTabSelected(AppTab.tasks),
+              Expanded(
+                child: _NavBarItem(
+                  icon: Icons.check_circle_outline,
+                  label: 'Tasks',
+                  isSelected: currentTab == AppTab.tasks,
+                  onTap: () => onTabSelected(AppTab.tasks),
+                ),
               ),
-              _NavBarItem(
-                icon: Icons.calendar_month_outlined,
-                label: 'Calendar',
-                isSelected: currentTab == AppTab.calendar,
-                onTap: () => onTabSelected(AppTab.calendar),
+              Expanded(
+                child: _NavBarItem(
+                  icon: Icons.calendar_month_outlined,
+                  label: 'Calendar',
+                  isSelected: currentTab == AppTab.calendar,
+                  onTap: () => onTabSelected(AppTab.calendar),
+                ),
               ),
-              _NavBarItem(
-                icon: Icons.loop,
-                label: 'Habit',
-                isSelected: currentTab == AppTab.habit,
-                onTap: () => onTabSelected(AppTab.habit),
+              Expanded(
+                child: _NavBarItem(
+                  icon: Icons.loop,
+                  label: 'Habit',
+                  isSelected: currentTab == AppTab.habit,
+                  onTap: () => onTabSelected(AppTab.habit),
+                ),
               ),
-              _NavBarItem(
-                icon: Icons.timer_outlined,
-                label: 'Focus',
-                isSelected: currentTab == AppTab.focus,
-                onTap: () => onTabSelected(AppTab.focus),
+              Expanded(
+                child: _NavBarItem(
+                  icon: Icons.timer_outlined,
+                  label: 'Focus',
+                  isSelected: currentTab == AppTab.focus,
+                  onTap: () => onTabSelected(AppTab.focus),
+                ),
               ),
-              _NavBarItem(
-                icon: Icons.article_outlined,
-                label: 'Docs',
-                isSelected: currentTab == AppTab.docs,
-                onTap: () => onTabSelected(AppTab.docs),
+              Expanded(
+                child: _NavBarItem(
+                  icon: Icons.article_outlined,
+                  label: 'Docs',
+                  isSelected: currentTab == AppTab.docs,
+                  onTap: () => onTabSelected(AppTab.docs),
+                ),
               ),
             ],
           ),
@@ -83,8 +93,7 @@ class _NavBarItem extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: SizedBox(
-        width: 60,
+      child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.center,

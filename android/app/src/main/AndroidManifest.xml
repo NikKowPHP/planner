@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required for network access to Supabase -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Add permission for Android 13+ -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <!-- ADD THESE FOR SCHEDULED ALARMS -->

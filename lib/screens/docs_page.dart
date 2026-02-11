@@ -431,32 +431,41 @@ class _DocsPageState extends ConsumerState<DocsPage> {
       );
     }
 
-    return Padding(
-      padding: const EdgeInsets.all(32.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Title Input
-          TextField(
-            controller: _titleController,
-            focusNode: _titleFocusNode, // NEW: Attach FocusNode
-            style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
-            decoration: const InputDecoration(
-              hintText: 'Untitled',
-              hintStyle: TextStyle(color: Colors.white24),
-              border: InputBorder.none,
-            ),
-            onChanged: (_) => _save(),
-            // Ensure Enter key moves focus to content
-            onSubmitted: (_) => _contentFocusNode.requestFocus(), 
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Title Input
+        Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 0,
+          ), // Use full width allowed by parent
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: _titleController,
+                focusNode: _titleFocusNode,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                ),
+                decoration: const InputDecoration(
+                  hintText: 'Untitled',
+                  hintStyle: TextStyle(color: Colors.white24),
+                  border: InputBorder.none,
+                ),
+                onChanged: (_) => _save(),
+                onSubmitted: (_) => _contentFocusNode.requestFocus(),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "Last updated: ${selectedPage.updatedAt.hour}:${selectedPage.updatedAt.minute.toString().padLeft(2, '0')}",
+                style: const TextStyle(color: Colors.white24, fontSize: 12),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-
-          // Metadata line
-          Text(
-            "Last updated: ${selectedPage.updatedAt.hour}:${selectedPage.updatedAt.minute.toString().padLeft(2, '0')}",
-            style: const TextStyle(color: Colors.white24, fontSize: 12),
-          ),
+        ),
 
           const SizedBox(height: 24),
 
@@ -511,8 +520,7 @@ class _DocsPageState extends ConsumerState<DocsPage> {
               ],
             ),
           ),
-        ],
-      ),
+      ],
     );
   }
 }

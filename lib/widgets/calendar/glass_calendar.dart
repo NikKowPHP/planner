@@ -179,19 +179,24 @@ class _GlassCalendarState extends ConsumerState<GlassCalendar> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              const Icon(Icons.calendar_month, color: Colors.white, size: 24),
-              const SizedBox(width: 12),
-              Text(
-                DateFormat('MMMM yyyy').format(_focusedDay),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
+          Expanded(
+            child: Row(
+              children: [
+                const Icon(Icons.calendar_month, color: Colors.white, size: 24),
+                const SizedBox(width: 12),
+                Flexible(
+                  child: Text(
+                    DateFormat('MMMM yyyy').format(_focusedDay),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
           Row(
             children: [

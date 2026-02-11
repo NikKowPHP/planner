@@ -23,7 +23,10 @@ class HomeAppBar extends ConsumerWidget {
             IconButton(
               // Make clickable
               icon: const Icon(Icons.menu, color: Colors.white, size: 28),
-              onPressed: onMenuPressed,
+              onPressed: () {
+                FileLogger().log('GESTURE: HomeAppBar menu button clicked');
+                onMenuPressed?.call();
+              },
             ),
             const SizedBox(width: 8),
             Text(

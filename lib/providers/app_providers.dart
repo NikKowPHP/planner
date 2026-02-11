@@ -302,6 +302,7 @@ final currentTitleProvider = Provider<String>((ref) {
   final lists = ref.watch(listsProvider).asData?.value ?? [];
   final tags = ref.watch(tagsProvider).asData?.value ?? [];
 
+  if (activeTab == AppTab.docs) return 'Docs';
   if (activeTab == AppTab.focus) return 'Focus';
   if (activeTab == AppTab.calendar) return 'Calendar';
   if (activeTab == AppTab.habit) return 'Habit';
