@@ -1,8 +1,5 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../widgets/glass_card.dart';
 import '../theme/glass_theme.dart';
 import '../widgets/responsive_layout.dart';
 import '../widgets/focus/focus_target_selector.dart';

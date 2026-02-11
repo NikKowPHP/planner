@@ -42,6 +42,10 @@ static void my_application_activate(GApplication* application) {
     }
   }
 #endif
+
+  // DISABLE DEFAULT HEADER BAR to allow Flutter to draw glass frame
+  use_header_bar = FALSE;
+
   if (use_header_bar) {
     GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
     gtk_widget_show(GTK_WIDGET(header_bar));

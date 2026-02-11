@@ -5,6 +5,7 @@ import 'screens/home_page.dart';
 import 'utils/ui_utils.dart';
 import 'config/supabase_config.dart';
 import 'middleware/auth_guard.dart';
+import 'services/system_tray_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -13,6 +14,10 @@ void main() async {
   await SupabaseConfig.initialize();
   
   UIUtils.configureSystemUI();
+  
+  // Initialize System Tray / Window Manager for Desktop
+  await SystemTrayService().init();
+
   // Wrap app in ProviderScope for Riverpod
   runApp(const ProviderScope(child: GlassyApp()));
 }
