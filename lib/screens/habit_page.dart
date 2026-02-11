@@ -103,6 +103,14 @@ class _HabitPageState extends ConsumerState<HabitPage> {
     final normalizedToday = DateTime(today.year, today.month, today.day);
     final isMobile = ResponsiveLayout.isMobile(context);
 
+    // Sync local selection with global selection from search
+    final globalSelectedHabit = ref.watch(homeViewProvider.select((s) => s.selectedHabit));
+    if (globalSelectedHabit != null && _selectedHabit?.id != globalSelectedHabit.id) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        setState(() => _selectedHabit = globalSelectedHabit);
+      });
+    }
+
     // Mobile: Show detail panel as full screen if selected
     if (isMobile && _selectedHabit != null) {
       return PopScope(

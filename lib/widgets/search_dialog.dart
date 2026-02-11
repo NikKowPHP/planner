@@ -88,10 +88,7 @@ class SearchDialog extends ConsumerWidget {
             dense: true,
             leading: Icon(icon, size: 16, color: Colors.white38),
             title: Text(_getName(item), style: const TextStyle(color: Colors.white)),
-            onTap: () {
-              ref.read(homeViewProvider.notifier).toggleSearch();
-              // Logic to navigate or select item
-            },
+            onTap: () => ref.read(homeViewProvider.notifier).navigateToItem(item),
           );
         }),
         const SizedBox(height: 16),

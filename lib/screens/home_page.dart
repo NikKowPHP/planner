@@ -222,12 +222,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                Expanded(
                  child: GlassCalendar(
                     onTaskTap: (task) {
-                      ref.read(homeViewProvider.notifier).selectTask(task);
-                    // On mobile, maybe show sheet, on desktop switch tab?
-                    // For simplicity, switch tab to tasks to view context
-                    ref
-                        .read(homeViewProvider.notifier)
-                        .setActiveTab(AppTab.tasks);
+                      ref.read(homeViewProvider.notifier).navigateToItem(task);
                     },
                  ),
                ),

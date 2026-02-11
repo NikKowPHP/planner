@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/task.dart';
+import '../models/task_list.dart';
 import '../services/todo_service.dart';
 import '../services/auth_service.dart';
 import '../services/logger.dart';
@@ -170,6 +171,7 @@ class HomeViewState {
   final SortBy sortBy;
   final bool hideCompleted;
   final Task? selectedTask;
+  final Habit? selectedHabit;
   final bool isSidebarVisible;
   final bool isSearchVisible;
   final String searchQuery;
@@ -181,6 +183,7 @@ class HomeViewState {
     this.sortBy = SortBy.date,
     this.hideCompleted = false,
     this.selectedTask,
+    this.selectedHabit,
     this.isSidebarVisible = true,
     this.isSearchVisible = false,
     this.searchQuery = '',
@@ -193,7 +196,9 @@ class HomeViewState {
     SortBy? sortBy,
     bool? hideCompleted,
     Task? selectedTask,
+    Habit? selectedHabit,
     bool nullSelectedTask = false,
+    bool nullSelectedHabit = false,
     bool? isSidebarVisible,
     bool? isSearchVisible,
     String? searchQuery,
@@ -205,6 +210,7 @@ class HomeViewState {
       sortBy: sortBy ?? this.sortBy,
       hideCompleted: hideCompleted ?? this.hideCompleted,
       selectedTask: nullSelectedTask ? null : (selectedTask ?? this.selectedTask),
+      selectedHabit: nullSelectedHabit ? null : (selectedHabit ?? this.selectedHabit),
       isSidebarVisible: isSidebarVisible ?? this.isSidebarVisible,
       isSearchVisible: isSearchVisible ?? this.isSearchVisible,
       searchQuery: searchQuery ?? this.searchQuery,
@@ -229,9 +235,32 @@ class HomeViewNotifier extends Notifier<HomeViewState> {
   void setSortBy(SortBy sort) => state = state.copyWith(sortBy: sort);
   void toggleHideCompleted() => state = state.copyWith(hideCompleted: !state.hideCompleted);
   void selectTask(Task? task) => state = state.copyWith(selectedTask: task, nullSelectedTask: task == null);
+  void selectHabit(Habit? habit) => state = state.copyWith(selectedHabit: habit, nullSelectedHabit: habit == null);
   void toggleSidebar() => state = state.copyWith(isSidebarVisible: !state.isSidebarVisible);
   void toggleSearch() => state = state.copyWith(isSearchVisible: !state.isSearchVisible, searchQuery: '');
   void setSearchQuery(String query) => state = state.copyWith(searchQuery: query);
+
+  // Navigation helper for search results
+  void navigateToItem(dynamic item) {
+    state = state.copyWith(isSearchVisible: false, searchQuery: '');
+
+    if (item is Task) {
+      state = state.copyWith(activeTab: AppTab.tasks, selectedTask: item);
+    } else if (item is Habit) {
+      state = state.copyWith(activeTab: AppTab.habit, selectedHabit: item);
+    } else if (item is TaskList) {
+      // Logic to find the list index in sidebar
+      final lists = ref.read(listsProvider).value ?? [];
+      final filters = ref.read(filtersProvider).value ?? [];
+      final index = lists.indexWhere((l) => l.id == item.id);
+      if (index != -1) {
+        state = state.copyWith(
+          activeTab: AppTab.tasks,
+          selectedIndex: 4 + filters.length + index,
+        );
+      }
+    }
+  }
 }
 
 final homeViewProvider = NotifierProvider<HomeViewNotifier, HomeViewState>(HomeViewNotifier.new);
