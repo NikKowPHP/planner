@@ -152,7 +152,8 @@ class _RailItem extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.all(12),
+        width: 50.0,
+        height: 50.0,
         decoration: BoxDecoration(
           color: isActive ? GlassTheme.accentColor.withValues(alpha: 0.2) : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
@@ -160,15 +161,12 @@ class _RailItem extends StatelessWidget {
               ? Border.all(color: GlassTheme.accentColor.withValues(alpha: 0.5))
               : Border.all(color: Colors.transparent),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              color: isActive ? GlassTheme.accentColor : Colors.white54,
-              size: 24,
-            ),
-          ],
+        child: Center(
+          child: Icon(
+            icon,
+            color: isActive ? GlassTheme.accentColor : Colors.white54,
+            size: 24.0,
+          ),
         ),
       ),
     );
