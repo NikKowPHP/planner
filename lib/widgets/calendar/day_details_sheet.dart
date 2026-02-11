@@ -8,6 +8,8 @@ import '../../providers/app_providers.dart';
 import '../../theme/glass_theme.dart';
 import '../glass_card.dart';
 import '../task_item.dart';
+import '../task_context_menu.dart';
+import '../../services/logger.dart';
 
 class DayDetailsSheet extends ConsumerStatefulWidget {
   final DateTime date;
@@ -56,6 +58,162 @@ class _DayDetailsSheetState extends ConsumerState<DayDetailsSheet> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
+  }
+
+  // --- NEW CONTEXT MENU LOGIC ---
+
+  Future<void> _safeAction(Future<void> Function() action, String name) async {
+    try {
+      await FileLogger().log('UI_SHEET: $name started');
+      await action();
+    } catch (e, stack) {
+      await FileLogger().error('UI_SHEET: $name failed', e, stack);
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
+  }
+
+  void _showTaskContextMenu(BuildContext context, Task task, TapUpDetails details) {
+    final pos = details.globalPosition;
+    final notifier = ref.read(tasksProvider.notifier);
+    
+    showMenu(
+      context: context,
+      position: RelativeRect.fromLTRB(pos.dx, pos.dy, pos.dx + 1, pos.dy + 1),
+      color: const Color(0xFF1E1E1E),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Colors.white10)),
+      items: TaskContextMenu.buildItems(
+        context: context,
+        task: task,
+        onDateSelect: (d) {
+          if (d == null) {
+            _pickDate(task);
+          } else {
+            final u = Task(
+                id: task.id, userId: task.userId, listId: task.listId, title: task.title, 
+                isCompleted: task.isCompleted, priority: task.priority, tagIds: task.tagIds, 
+                isPinned: task.isPinned, dueDate: d
+            );
+            _safeAction(() => notifier.updateTask(u), 'Context: Update Date');
+          }
+        },
+        onPrioritySelect: (p) {
+          final u = Task(
+              id: task.id, userId: task.userId, listId: task.listId, title: task.title, 
+              isCompleted: task.isCompleted, priority: p, tagIds: task.tagIds, 
+              isPinned: task.isPinned, dueDate: task.dueDate
+          );
+          _safeAction(() => notifier.updateTask(u), 'Context: Priority');
+        },
+        onPin: () {
+          Navigator.pop(context);
+          final u = Task(
+              id: task.id, userId: task.userId, listId: task.listId, title: task.title, 
+              isCompleted: task.isCompleted, priority: task.priority, tagIds: task.tagIds, 
+              isPinned: !task.isPinned, dueDate: task.dueDate
+          );
+          _safeAction(() => notifier.updateTask(u), 'Context: Pin');
+        },
+        onDuplicate: () {
+          Navigator.pop(context);
+          _safeAction(() => notifier.createTask(task.title, listId: task.listId, dueDate: task.dueDate), 'Context: Duplicate');
+        },
+        onMove: () {
+          Navigator.pop(context);
+          _showMoveToDialog(context, task);
+        },
+        onTags: () { Navigator.pop(context); },
+        onDelete: () {
+          Navigator.pop(context);
+          _safeAction(() => notifier.deleteTask(task), 'Context: Delete');
+        },
+      ),
+    );
+  }
+
+  Future<void> _pickDate(Task task) async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: task.dueDate ?? now,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 5),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.dark(
+            primary: GlassTheme.accentColor,
+            surface: Color(0xFF1E1E1E),
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) {
+      final u = Task(
+          id: task.id, userId: task.userId, listId: task.listId, title: task.title, 
+          isCompleted: task.isCompleted, priority: task.priority, tagIds: task.tagIds, 
+          isPinned: task.isPinned, dueDate: picked
+      );
+      _safeAction(() => ref.read(tasksProvider.notifier).updateTask(u), 'Context: Pick Date');
+    }
+  }
+
+  Future<void> _showMoveToDialog(BuildContext context, Task task) async {
+    final lists = ref.read(listsProvider).value ?? [];
+    final notifier = ref.read(tasksProvider.notifier);
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Container(
+          width: 300,
+          padding: const EdgeInsets.all(16),
+          constraints: const BoxConstraints(maxHeight: 400),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Move to List', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+              const SizedBox(height: 16),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: const Icon(Icons.inbox, color: Colors.white54),
+                        title: const Text('Inbox', style: TextStyle(color: Colors.white)),
+                        onTap: () {
+                          Navigator.pop(dialogContext);
+                          final u = Task(
+                              id: task.id, userId: task.userId, title: task.title, description: task.description, 
+                              dueDate: task.dueDate, priority: task.priority, isCompleted: task.isCompleted, 
+                              isPinned: task.isPinned, tagIds: task.tagIds, listId: null
+                          );
+                          _safeAction(() => notifier.updateTask(u), 'Move to Inbox');
+                        },
+                      ),
+                      ...lists.map((l) => ListTile(
+                        leading: const Icon(Icons.list, color: Colors.white54),
+                        title: Text(l.name, style: const TextStyle(color: Colors.white)),
+                        onTap: () {
+                          Navigator.pop(dialogContext);
+                          final u = Task(
+                              id: task.id, userId: task.userId, title: task.title, description: task.description, 
+                              dueDate: task.dueDate, priority: task.priority, isCompleted: task.isCompleted, 
+                              isPinned: task.isPinned, tagIds: task.tagIds, listId: l.id
+                          );
+                          _safeAction(() => notifier.updateTask(u), 'Move to ${l.name}');
+                        },
+                      )),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -159,12 +317,14 @@ class _DayDetailsSheetState extends ConsumerState<DayDetailsSheet> {
                               tagIds: task.tagIds, isPinned: task.isPinned,
                               isCompleted: val ?? false
                             );
-                            ref.read(tasksProvider.notifier).updateTask(updated);
+                            _safeAction(() => ref.read(tasksProvider.notifier).updateTask(updated), 'Toggle Task');
                           },
                           onTap: () {
                             Navigator.pop(context); // Close sheet
                             widget.onTaskTap(task); // Open full detail panel
                           },
+                          // NEW: Connect context menu
+                          onContextMenu: (details) => _showTaskContextMenu(context, task, details),
                         ).animate().slideX(begin: 0.1, end: 0, delay: (index * 50).ms),
                       );
                     },

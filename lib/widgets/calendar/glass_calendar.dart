@@ -9,6 +9,7 @@ import '../../providers/app_providers.dart';
 import '../glass_card.dart';
 import 'day_details_sheet.dart'; // Import the new sheet
 import 'day_view.dart';
+import 'agenda_view.dart'; // Import AgendaView
 
 
 class GlassCalendar extends ConsumerStatefulWidget {
@@ -24,16 +25,17 @@ class _GlassCalendarState extends ConsumerState<GlassCalendar> {
   DateTime _focusedDay = DateTime.now();
   
   // Custom View State (instead of just CalendarFormat)
-  // 0 = Month, 1 = Week, 2 = Day
+  // 0 = Month, 1 = Week, 2 = Day, 3 = Agenda
   int _viewMode = 0; 
   CalendarFormat _calendarFormat = CalendarFormat.month;
 
   void _setFormat(int mode) {
+    HapticFeedback.selectionClick();
     setState(() {
       _viewMode = mode;
       if (mode == 0) _calendarFormat = CalendarFormat.month;
       if (mode == 1) _calendarFormat = CalendarFormat.week;
-      // mode 2 (Day) uses custom widget
+      // mode 2 (Day) & 3 (Agenda) use custom widgets
     });
   }
 
@@ -115,6 +117,8 @@ class _GlassCalendarState extends ConsumerState<GlassCalendar> {
   @override
   Widget build(BuildContext context) {
     final tasksMap = ref.watch(calendarTasksProvider);
+    // Get full list for Agenda View
+    final allTasks = ref.watch(tasksProvider).asData?.value ?? [];
 
     return Stack(
       children: [
@@ -122,67 +126,7 @@ class _GlassCalendarState extends ConsumerState<GlassCalendar> {
           children: [
             _buildHeader(),
             Expanded(
-              child: _viewMode == 2
-                  ? DayView(
-                      focusedDay: _focusedDay,
-                      tasks: ref.watch(tasksProvider).asData?.value ?? [],
-                      onTaskTap: widget.onTaskTap,
-                    )
-                  : TableCalendar<Task>(
-                      firstDay: DateTime.utc(2020, 1, 1),
-                      lastDay: DateTime.utc(2030, 12, 31),
-                      focusedDay: _focusedDay,
-                      calendarFormat: _calendarFormat,
-                      startingDayOfWeek: StartingDayOfWeek.sunday,
-                      
-                      shouldFillViewport: true,
-                      rowHeight: 120, // Taller rows
-                      daysOfWeekHeight: 40,
-                      headerVisible: false,
-
-                      onDaySelected: (selectedDay, focusedDay) {
-                        HapticFeedback.lightImpact();
-                        setState(() => _focusedDay = focusedDay);
-                        _showDayDetails(selectedDay);
-                      },
-                      onDayLongPressed: (selectedDay, focusedDay) {
-                        HapticFeedback.heavyImpact();
-                        setState(() => _focusedDay = focusedDay);
-                        _showQuickAddDialog(selectedDay);
-                      },
-
-                      daysOfWeekStyle: const DaysOfWeekStyle(
-                        weekdayStyle: TextStyle(
-                          color: Colors.white38,
-                          fontSize: 12,
-                        ),
-                        weekendStyle: TextStyle(
-                          color: Colors.white38,
-                          fontSize: 12,
-                        ),
-                      ),
-
-                      calendarBuilders: CalendarBuilders(
-                        defaultBuilder: (context, day, focusedDay) =>
-                            _buildCell(context, day, tasksMap, isToday: false),
-                        todayBuilder: (context, day, focusedDay) =>
-                            _buildCell(context, day, tasksMap, isToday: true),
-                        outsideBuilder: (context, day, focusedDay) =>
-                            _buildCell(context, day, tasksMap, isOutside: true),
-                        selectedBuilder: (context, day, focusedDay) =>
-                            _buildCell(
-                              context,
-                              day,
-                              tasksMap,
-                              isToday: false,
-                              isSelected: true,
-                            ),
-                      ),
-
-                      onPageChanged: (focusedDay) {
-                        setState(() => _focusedDay = focusedDay);
-                      },
-                    ),
+              child: _buildBody(tasksMap, allTasks),
             ),
           ],
         ),
@@ -194,13 +138,12 @@ class _GlassCalendarState extends ConsumerState<GlassCalendar> {
           child: Center(
             child: GlassCard(
               height: 50,
-              width: 320,
+              width: 340, // Slightly wider for 4 buttons
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
               borderRadius: 25,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  // Using index for view mode: 0=Month, 1=Week, 2=Day
                   _ViewSwitchButton(
                     text: 'Month',
                     isSelected: _viewMode == 0,
@@ -215,6 +158,11 @@ class _GlassCalendarState extends ConsumerState<GlassCalendar> {
                     text: 'Day',
                     isSelected: _viewMode == 2,
                     onTap: () => _setFormat(2),
+                  ),
+                  _ViewSwitchButton(
+                    text: 'Agenda',
+                    isSelected: _viewMode == 3,
+                    onTap: () => _setFormat(3),
                   ),
                 ],
               ),
@@ -300,6 +248,71 @@ class _GlassCalendarState extends ConsumerState<GlassCalendar> {
     );
   }
 
+  Widget _buildBody(Map<DateTime, List<Task>> tasksMap, List<Task> allTasks) {
+    if (_viewMode == 3) {
+      return AgendaView(
+        focusedDay: _focusedDay,
+        tasks: allTasks,
+        onTaskTap: widget.onTaskTap,
+      );
+    }
+
+    if (_viewMode == 2) {
+      return DayView(
+        focusedDay: _focusedDay,
+        tasks: allTasks,
+        onTaskTap: widget.onTaskTap,
+      );
+    }
+
+    return TableCalendar<Task>(
+      firstDay: DateTime.utc(2020, 1, 1),
+      lastDay: DateTime.utc(2030, 12, 31),
+      focusedDay: _focusedDay,
+      calendarFormat: _calendarFormat,
+      startingDayOfWeek: StartingDayOfWeek.sunday,
+      shouldFillViewport: true,
+      rowHeight: 120,
+      daysOfWeekHeight: 40,
+      headerVisible: false,
+
+      onDaySelected: (selectedDay, focusedDay) {
+        HapticFeedback.lightImpact();
+        setState(() => _focusedDay = focusedDay);
+        _showDayDetails(selectedDay);
+      },
+      onDayLongPressed: (selectedDay, focusedDay) {
+        HapticFeedback.heavyImpact();
+        setState(() => _focusedDay = focusedDay);
+        _showQuickAddDialog(selectedDay);
+      },
+
+      daysOfWeekStyle: const DaysOfWeekStyle(
+        weekdayStyle: TextStyle(color: Colors.white38, fontSize: 12),
+        weekendStyle: TextStyle(color: Colors.white38, fontSize: 12),
+      ),
+
+      calendarBuilders: CalendarBuilders(
+        defaultBuilder: (context, day, focusedDay) =>
+            _buildCell(context, day, tasksMap, isToday: false),
+        todayBuilder: (context, day, focusedDay) =>
+            _buildCell(context, day, tasksMap, isToday: true),
+        outsideBuilder: (context, day, focusedDay) =>
+            _buildCell(context, day, tasksMap, isOutside: true),
+        selectedBuilder: (context, day, focusedDay) => _buildCell(
+          context,
+          day,
+          tasksMap,
+          isToday: false,
+          isSelected: true,
+        ),
+      ),
+
+      onPageChanged: (focusedDay) {
+        setState(() => _focusedDay = focusedDay);
+      },
+    );
+  }
 
   Widget _buildCell(
     BuildContext context,
