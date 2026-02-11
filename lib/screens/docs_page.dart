@@ -19,6 +19,7 @@ class DocsPage extends ConsumerStatefulWidget {
 
 class _DocsPageState extends ConsumerState<DocsPage> {
   final TextEditingController _titleController = TextEditingController();
+  final FocusNode _titleFocusNode = FocusNode(); // NEW: Focus node for title
 
   // Use the custom controller - initialized in initState
   late MarkdownSyntaxTextEditingController _contentController;
@@ -130,6 +131,7 @@ class _DocsPageState extends ConsumerState<DocsPage> {
   @override
   void dispose() {
     _titleController.dispose();
+    _titleFocusNode.dispose();
     _contentController.dispose();
     _contentFocusNode.dispose();
     _scrollController.dispose();
@@ -143,6 +145,18 @@ class _DocsPageState extends ConsumerState<DocsPage> {
       _titleController.text = page.title;
       if (_contentController.text != page.content) {
         _contentController.text = page.content;
+      }
+
+      // NEW: Auto-focus title if it's a new/empty page
+      if (page.title == 'Untitled' && page.content.isEmpty) {
+        // Wait for frame to ensure widget is built
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _titleFocusNode.requestFocus();
+          _titleController.selection = TextSelection(
+            baseOffset: 0, 
+            extentOffset: _titleController.text.length
+          );
+        });
       }
     }
   }
@@ -271,6 +285,11 @@ class _DocsPageState extends ConsumerState<DocsPage> {
     });
     _contentFocusNode.requestFocus();
     _save();
+
+    // 5. NEW: Navigate to the new page immediately
+    // Small delay to ensure the parent save triggers and UI is ready
+    await Future.delayed(const Duration(milliseconds: 50));
+    ref.read(selectedPageIdProvider.notifier).state = newPage.id;
   }
 
   void _insertText(String textToInsert) {
@@ -420,6 +439,7 @@ class _DocsPageState extends ConsumerState<DocsPage> {
           // Title Input
           TextField(
             controller: _titleController,
+            focusNode: _titleFocusNode, // NEW: Attach FocusNode
             style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
             decoration: const InputDecoration(
               hintText: 'Untitled',
@@ -427,6 +447,8 @@ class _DocsPageState extends ConsumerState<DocsPage> {
               border: InputBorder.none,
             ),
             onChanged: (_) => _save(),
+            // Ensure Enter key moves focus to content
+            onSubmitted: (_) => _contentFocusNode.requestFocus(), 
           ),
           const SizedBox(height: 8),
 
