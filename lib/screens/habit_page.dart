@@ -101,34 +101,88 @@ class _HabitPageState extends ConsumerState<HabitPage> {
       context: context,
       position: RelativeRect.fromLTRB(position.dx, position.dy, position.dx + 1, position.dy + 1),
       color: const Color(0xFF1E1E1E),
-      surfaceTintColor: Colors.transparent,
+      elevation: 8,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: const BorderSide(color: Colors.white10),
       ),
-      items: [
-        PopupMenuItem(
-          value: 'pomo',
-          child: Row(
-            children: [
-              const Icon(Icons.timer_outlined, color: GlassTheme.accentColor, size: 18),
-              const SizedBox(width: 12),
-              const Text('Start Pomodoro', style: TextStyle(color: Colors.white)),
-            ],
-          ),
-        ),
+      items: <PopupMenuEntry<String>>[
+        _buildPopupItem('edit', 'Edit', Icons.edit_outlined),
+        _buildPopupItem('archive', habit.isArchived ? 'Unarchive' : 'Archive', Icons.archive_outlined),
+        const PopupMenuDivider(height: 1),
+        _buildPopupItem('pomo', 'Start Focus', Icons.track_changes_outlined, hasSubmenu: true),
+        const PopupMenuDivider(height: 1),
+        _buildPopupItem('delete', 'Delete', Icons.delete_outline, isDestructive: true),
       ],
     ).then((value) {
-      if (value == 'pomo') {
-        final focusNotifier = ref.read(focusProvider.notifier);
-        // 1. Set the target
-        focusNotifier.setTarget(habit.id, 'habit');
-        // 2. Navigate to Focus Tab
-        ref.read(homeViewProvider.notifier).setActiveTab(AppTab.focus);
-        // 3. Start timer
-        focusNotifier.toggleTimer();
+      if (value == null) return;
+
+      final notifier = ref.read(habitsProvider.notifier);
+
+      switch (value) {
+        case 'edit':
+          if (mounted) {
+            _showEditHabitDialog(context, ref, habit);
+          }
+          break;
+        case 'archive':
+          notifier.archiveHabit(habit.id, !habit.isArchived);
+          break;
+        case 'pomo':
+          ref.read(focusProvider.notifier).setTarget(habit.id, 'habit');
+          ref.read(homeViewProvider.notifier).setActiveTab(AppTab.focus);
+          ref.read(focusProvider.notifier).toggleTimer();
+          break;
+        case 'delete':
+          _confirmDelete(habit);
+          break;
       }
     });
+  }
+
+  PopupMenuItem<String> _buildPopupItem(
+    String value, String title, IconData icon, 
+    {bool isDestructive = false, bool hasSubmenu = false}
+  ) {
+    return PopupMenuItem<String>(
+      value: value,
+      height: 40,
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: isDestructive ? Colors.redAccent : Colors.white70),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(title, style: TextStyle(
+              color: isDestructive ? Colors.redAccent : Colors.white, 
+              fontSize: 14
+            ))
+          ),
+          if (hasSubmenu) 
+            const Icon(Icons.chevron_right, size: 16, color: Colors.white38),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDelete(Habit habit) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        title: const Text("Delete Habit?"),
+        content: Text("Are you sure you want to delete '${habit.name}'? This will also remove all historical logs."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
+          TextButton(
+            onPressed: () {
+              ref.read(habitsProvider.notifier).deleteHabit(habit.id);
+              Navigator.pop(ctx);
+            }, 
+            child: const Text("Delete", style: TextStyle(color: Colors.redAccent))
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -575,6 +629,281 @@ class _HabitPageState extends ConsumerState<HabitPage> {
                 }
               },
               child: const Text('Create'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showEditHabitDialog(BuildContext context, WidgetRef ref, Habit habit) async {
+    final nameController = TextEditingController(text: habit.name);
+    int selectedIconIndex = _kHabitIcons.indexWhere((icon) => icon.codePoint.toString() == habit.icon);
+    if (selectedIconIndex == -1) selectedIconIndex = 0;
+    
+    int selectedColorIndex = _kHabitColors.indexWhere((color) => 
+      '#${color.toARGB32().toRadixString(16).substring(2)}' == habit.color);
+    if (selectedColorIndex == -1) selectedColorIndex = _kHabitColors.length ~/ 2;
+    
+    int goalValue = habit.goalValue;
+    TimeOfDay? selectedTime;
+    if (habit.reminderTime != null) {
+      final parts = habit.reminderTime!.split(':');
+      selectedTime = TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+    }
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF1E1E1E),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text('Edit Habit', style: TextStyle(color: Colors.white)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Name
+                TextField(
+                  controller: nameController,
+                  autofocus: true,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: 'Habit Name',
+                    hintStyle: const TextStyle(color: Colors.white38),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: Colors.white12),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: GlassTheme.accentColor),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Icon picker
+                const Text(
+                  'Icon',
+                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: List.generate(_kHabitIcons.length, (i) {
+                    final selected = i == selectedIconIndex;
+                    return GestureDetector(
+                      onTap: () => setDialogState(() => selectedIconIndex = i),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? _kHabitColors[selectedColorIndex].withValues(
+                                  alpha: 0.3,
+                                )
+                              : Colors.white.withValues(alpha: 0.05),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: selected
+                                ? _kHabitColors[selectedColorIndex]
+                                : Colors.transparent,
+                          ),
+                        ),
+                        child: Icon(
+                          _kHabitIcons[i],
+                          color: Colors.white70,
+                          size: 20,
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 20),
+
+                // Color picker
+                const Text(
+                  'Color',
+                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: List.generate(_kHabitColors.length, (i) {
+                    final selected = i == selectedColorIndex;
+                    return GestureDetector(
+                      onTap: () => setDialogState(() => selectedColorIndex = i),
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: _kHabitColors[i],
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: selected ? Colors.white : Colors.transparent,
+                            width: selected ? 2.5 : 0,
+                          ),
+                        ),
+                        child: selected
+                            ? const Icon(
+                                Icons.check,
+                                color: Colors.white,
+                                size: 16,
+                              )
+                            : null,
+                      ),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 20),
+
+                // Goal value
+                const Text(
+                  'Daily Goal',
+                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(
+                        Icons.remove_circle_outline,
+                        color: Colors.white54,
+                      ),
+                      onPressed: goalValue > 1
+                          ? () => setDialogState(() => goalValue--)
+                          : null,
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '$goalValue',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.add_circle_outline,
+                        color: Colors.white54,
+                      ),
+                      onPressed: () => setDialogState(() => goalValue++),
+                    ),
+                    const SizedBox(width: 4),
+                    const Text(
+                      'times / day',
+                      style: TextStyle(color: Colors.white38, fontSize: 12),
+                    ),
+                  ],
+                ),
+                
+                // Reminder Section
+                const SizedBox(height: 20),
+                const Text('Daily Reminder', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: () async {
+                    final picked = await showTimePicker(
+                      context: context,
+                      initialTime: selectedTime ?? const TimeOfDay(hour: 9, minute: 0),
+                      builder: (context, child) => Theme(
+                        data: Theme.of(context).copyWith(colorScheme: const ColorScheme.dark(primary: GlassTheme.accentColor, surface: Color(0xFF1E1E1E))),
+                        child: child!,
+                      ),
+                    );
+                    if (picked != null) setDialogState(() => selectedTime = picked);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.white12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.alarm, color: Colors.white70, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          selectedTime != null ? selectedTime!.format(context) : 'No Reminder',
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final logger = FileLogger();
+                if (nameController.text.trim().isNotEmpty) {
+                  await logger.log(
+                    'HABIT_UI: Requesting edit habit: ${nameController.text}',
+                  );
+                  try {
+                    final c = _kHabitColors[selectedColorIndex];
+                    final colorHex =
+                        '#${c.toARGB32().toRadixString(16).substring(2)}';
+                    final iconCode = _kHabitIcons[selectedIconIndex].codePoint
+                        .toString();
+                    
+                    // Format "HH:mm"
+                    String? reminderStr;
+                    if (selectedTime != null) {
+                      final h = selectedTime!.hour.toString().padLeft(2, '0');
+                      final m = selectedTime!.minute.toString().padLeft(2, '0');
+                      reminderStr = "$h:$m";
+                    }
+                    
+                    await ref
+                        .read(habitsProvider.notifier)
+                        .updateHabit(
+                          habit.id,
+                          name: nameController.text.trim(),
+                          icon: iconCode,
+                          color: colorHex,
+                          goalValue: goalValue,
+                          reminderTime: reminderStr,
+                        );
+                    if (ctx.mounted) Navigator.pop(ctx);
+                  } catch (e, s) {
+                    await logger.error(
+                      'HABIT_UI: Error during habit edit dialog submission',
+                      e,
+                      s,
+                    );
+                  }
+                }
+              },
+              child: const Text('Save'),
             ),
           ],
         ),

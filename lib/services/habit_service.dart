@@ -99,13 +99,24 @@ class HabitService {
     }
   }
 
+  Future<void> setArchiveHabit(String habitId, bool archived) async {
+    try {
+      await _supabase.from('habits').update({
+        'is_archived': archived
+      }).eq('id', habitId);
+    } catch (e, s) {
+      await _logger.error('HabitService: Archive failed', e, s);
+      rethrow;
+    }
+  }
+
   Future<Habit> updateHabit(
     String habitId, {
     String? name,
     String? icon,
     String? color,
     int? goalValue,
-    String? reminderTime, // New
+    String? reminderTime,
   }) async {
     try {
       final data = <String, dynamic>{};
@@ -113,7 +124,7 @@ class HabitService {
       if (icon != null) data['icon'] = icon;
       if (color != null) data['color'] = color;
       if (goalValue != null) data['goal_value'] = goalValue;
-      if (reminderTime != null) data['reminder_time'] = reminderTime; // New
+      if (reminderTime != null) data['reminder_time'] = reminderTime;
 
       final response = await _supabase
           .from('habits')

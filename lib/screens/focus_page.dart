@@ -29,13 +29,6 @@ class _FocusPageState extends ConsumerState<FocusPage> {
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, s) => Center(child: Text("Error: $e", style: const TextStyle(color: Colors.white))),
       data: (state) {
-        // Check for completion
-        if (!state.isStopwatch && state.remainingSeconds == 0 && !state.isRunning) {
-          // We can show a 'Session Complete' UI or simple snackbar logic handled here
-          // But strictly logic: we wait for user to hit "Done" or auto-save.
-          // Let's add a "Done" button or auto-reset in _completeSession
-        }
-
         // Resolve Selected Target Object for Display
         dynamic selectedTargetObj;
         if (state.selectedTargetId != null) {
@@ -52,37 +45,56 @@ class _FocusPageState extends ConsumerState<FocusPage> {
           }
         }
 
+        // NEW: Color logic for break mode
+        final themeColor = state.isBreak ? Colors.greenAccent : GlassTheme.accentColor;
+
         final timerContent = Stack(
           children: [
             Column(
               children: [
-                // Top Toggle (Pomo / Stopwatch)
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(20),
+                // Top Toggle (Pomo / Stopwatch) - Hidden during break
+                if (!state.isBreak)
+                  Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _ToggleBtn(
+                          text: "Pomo", 
+                          isSelected: !state.isStopwatch, 
+                          onTap: () { FileLogger().log('GESTURE: Focus Mode switched to Pomodoro'); ref.read(focusProvider.notifier).setMode(isStopwatch: false); }
+                        ),
+                        _ToggleBtn(
+                          text: "Stopwatch", 
+                          isSelected: state.isStopwatch, 
+                          onTap: () { FileLogger().log('GESTURE: Focus Mode switched to Stopwatch'); ref.read(focusProvider.notifier).setMode(isStopwatch: true); }
+                        ),
+                      ],
+                    ),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _ToggleBtn(
-                        text: "Pomo", 
-                        isSelected: !state.isStopwatch, 
-                        onTap: () { FileLogger().log('GESTURE: Focus Mode switched to Pomodoro'); ref.read(focusProvider.notifier).setMode(isStopwatch: false); }
+                
+                // NEW: Display "Break Mode" indicator
+                if (state.isBreak)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: Text(
+                      "BREAK TIME", 
+                      style: TextStyle(
+                        color: themeColor, 
+                        fontWeight: FontWeight.bold, 
+                        letterSpacing: 2,
+                        fontSize: 16,
                       ),
-                      _ToggleBtn(
-                        text: "Stopwatch", 
-                        isSelected: state.isStopwatch, 
-                        onTap: () { FileLogger().log('GESTURE: Focus Mode switched to Stopwatch'); ref.read(focusProvider.notifier).setMode(isStopwatch: true); }
-                      ),
-                    ],
+                    ),
                   ),
-                ),
                 
                 const Spacer(),
 
-                // Timer Circle
+                // Timer Circle (Update color)
                 SizedBox(
                   width: 300,
                   height: 300,
@@ -94,7 +106,7 @@ class _FocusPageState extends ConsumerState<FocusPage> {
                           ? 0 
                           : (state.initialDuration > 0 ? 1.0 - (state.remainingSeconds / state.initialDuration) : 0),
                         strokeWidth: 8,
-                        color: GlassTheme.accentColor,
+                        color: themeColor,
                         backgroundColor: Colors.white10,
                         strokeCap: StrokeCap.round,
                       ),
@@ -115,47 +127,71 @@ class _FocusPageState extends ConsumerState<FocusPage> {
 
                 const SizedBox(height: 40),
 
-                // Target Selector Button
-                GestureDetector(
-                  onTap: () => setState(() => _showSelector = !_showSelector),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(30),
-                      border: Border.all(color: Colors.white24),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(_getTargetIcon(selectedTargetObj), color: Colors.white70, size: 18),
-                        const SizedBox(width: 12),
-                        Text(_getTargetName(selectedTargetObj), style: const TextStyle(color: Colors.white)),
-                        const SizedBox(width: 8),
-                        const Icon(Icons.keyboard_arrow_down, color: Colors.white54, size: 18),
-                      ],
+                // Target Selector Button - Hidden during break
+                if (!state.isBreak)
+                  GestureDetector(
+                    onTap: () => setState(() => _showSelector = !_showSelector),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(30),
+                        border: Border.all(color: Colors.white24),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(_getTargetIcon(selectedTargetObj), color: Colors.white70, size: 18),
+                          const SizedBox(width: 12),
+                          Text(_getTargetName(selectedTargetObj), style: const TextStyle(color: Colors.white)),
+                          const SizedBox(width: 8),
+                          const Icon(Icons.keyboard_arrow_down, color: Colors.white54, size: 18),
+                        ],
+                      ),
                     ),
                   ),
-                ),
 
                 const SizedBox(height: 40),
 
-                // Actions
-                if (state.remainingSeconds == 0 && !state.isStopwatch && !state.isRunning)
-                  // Completion State
-                  GestureDetector(
-                    onTap: () => _handleSessionComplete(state, selectedTargetObj),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.greenAccent,
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                      child: const Text(
-                        'Save & Reset',
-                        style: TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                    ),
+                // NEW: Actions logic for "Start the rest?" / "Focus Again"
+                if (state.remainingSeconds == 0 && !state.isRunning)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (!state.isBreak) // If focus just finished
+                        GestureDetector(
+                          onTap: () {
+                            FileLogger().log('GESTURE: Break started from focus completion');
+                            ref.read(focusProvider.notifier).startBreak();
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 16),
+                            decoration: BoxDecoration(
+                              color: Colors.greenAccent,
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                            child: const Text(
+                              'Start the rest?',
+                              style: TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        )
+                      else // If break just finished
+                        GestureDetector(
+                          onTap: () => ref.read(focusProvider.notifier).reset(),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 16),
+                            decoration: BoxDecoration(
+                              color: GlassTheme.accentColor,
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                            child: const Text(
+                              'Focus Again',
+                              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                    ],
                   )
                 else
                   Row(
@@ -182,15 +218,15 @@ class _FocusPageState extends ConsumerState<FocusPage> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 64, vertical: 18),
                           decoration: BoxDecoration(
-                            color: GlassTheme.accentColor,
+                            color: themeColor,
                             borderRadius: BorderRadius.circular(30),
                             boxShadow: [
-                              BoxShadow(color: GlassTheme.accentColor.withValues(alpha: 0.4), blurRadius: 20, spreadRadius: 2),
+                              BoxShadow(color: themeColor.withValues(alpha: 0.4), blurRadius: 20, spreadRadius: 2),
                             ],
                           ),
                           child: Text(
                             state.isRunning ? 'Pause' : 'Start',
-                            style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                            style: TextStyle(color: state.isBreak ? Colors.black : Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                           ),
                         ),
                       ),

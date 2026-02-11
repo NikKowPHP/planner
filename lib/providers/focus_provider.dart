@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/logger.dart';
+import 'app_providers.dart';
 
 // State Model
 class FocusState {
@@ -10,6 +11,7 @@ class FocusState {
   final int initialDuration; // For calculating progress
   final bool isRunning;
   final bool isStopwatch;
+  final bool isBreak;
   final DateTime? lastUpdated;
   
   // Target Info
@@ -21,6 +23,7 @@ class FocusState {
     this.initialDuration = 25 * 60,
     this.isRunning = false,
     this.isStopwatch = false,
+    this.isBreak = false,
     this.lastUpdated,
     this.selectedTargetId,
     this.targetType,
@@ -31,6 +34,7 @@ class FocusState {
     int? initialDuration,
     bool? isRunning,
     bool? isStopwatch,
+    bool? isBreak,
     DateTime? lastUpdated,
     String? selectedTargetId,
     String? targetType,
@@ -41,6 +45,7 @@ class FocusState {
       initialDuration: initialDuration ?? this.initialDuration,
       isRunning: isRunning ?? this.isRunning,
       isStopwatch: isStopwatch ?? this.isStopwatch,
+      isBreak: isBreak ?? this.isBreak,
       lastUpdated: lastUpdated ?? this.lastUpdated,
       selectedTargetId: nullTarget ? null : (selectedTargetId ?? this.selectedTargetId),
       targetType: nullTarget ? null : (targetType ?? this.targetType),
@@ -52,6 +57,7 @@ class FocusState {
     'initialDuration': initialDuration,
     'isRunning': isRunning,
     'isStopwatch': isStopwatch,
+    'isBreak': isBreak,
     'lastUpdated': lastUpdated?.toIso8601String(),
     'selectedTargetId': selectedTargetId,
     'targetType': targetType,
@@ -63,6 +69,7 @@ class FocusState {
       initialDuration: json['initialDuration'] ?? 25 * 60,
       isRunning: json['isRunning'] ?? false,
       isStopwatch: json['isStopwatch'] ?? false,
+      isBreak: json['isBreak'] ?? false,
       lastUpdated: json['lastUpdated'] != null ? DateTime.parse(json['lastUpdated']) : null,
       selectedTargetId: json['selectedTargetId'],
       targetType: json['targetType'],
@@ -216,15 +223,54 @@ class FocusTimerNotifier extends AsyncNotifier<FocusState> {
     _persist();
   }
 
+  // NEW: Method to specifically start a break
+  void startBreak({int durationMinutes = 5}) {
+    _ticker?.cancel();
+    state = AsyncData(state.value!.copyWith(
+      isBreak: true,
+      isRunning: true,
+      remainingSeconds: durationMinutes * 60,
+      initialDuration: durationMinutes * 60,
+      lastUpdated: DateTime.now(),
+    ));
+    _startTicker();
+    _persist();
+  }
+
   void completeSession() {
     _complete();
   }
 
-  void _complete() {
+  void _complete() async {
     _ticker?.cancel();
     final current = state.value!;
     
-    // Don't auto-reset value yet, UI needs to see "00:00" to trigger save
+    // NEW: Trigger Auto-Save only for Focus sessions (not breaks)
+    if (!current.isBreak) {
+      final duration = current.isStopwatch ? current.remainingSeconds : current.initialDuration;
+      try {
+        // Directly use FocusService to avoid circular imports
+        final focusService = ref.read(focusServiceProvider);
+        await focusService.saveSession(
+          startTime: DateTime.now().subtract(Duration(seconds: duration)),
+          durationSeconds: duration,
+          taskId: current.targetType == 'task' ? current.selectedTargetId : null,
+          habitId: current.targetType == 'habit' ? current.selectedTargetId : null,
+        );
+        // Invalidate history provider to refresh stats
+        ref.invalidate(focusHistoryProvider);
+        
+        // If session was linked to a habit, also toggle the habit log for today automatically
+        if (current.targetType == 'habit' && current.selectedTargetId != null) {
+          final now = DateTime.now();
+          final normalized = DateTime(now.year, now.month, now.day);
+          await ref.read(habitToggleProvider)(current.selectedTargetId!, normalized);
+        }
+      } catch (e) {
+        FileLogger().error('FocusProvider: Auto-save failed', e);
+      }
+    }
+
     state = AsyncData(current.copyWith(
       isRunning: false,
       remainingSeconds: 0,
@@ -237,6 +283,7 @@ class FocusTimerNotifier extends AsyncNotifier<FocusState> {
      final current = state.value!;
      state = AsyncData(current.copyWith(
        isRunning: false,
+       isBreak: false,
        remainingSeconds: current.isStopwatch ? 0 : 25 * 60,
      ));
      _persist();

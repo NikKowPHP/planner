@@ -568,6 +568,24 @@ class HabitsNotifier extends AsyncNotifier<List<Habit>> {
       await NotificationService().cancelReminder(id);
     }
   }
+
+  Future<void> archiveHabit(String id, bool archived) async {
+    await ref.read(habitServiceProvider).setArchiveHabit(id, archived);
+    state = AsyncData((state.value ?? []).map((h) => 
+      h.id == id ? Habit(
+        id: h.id,
+        userId: h.userId,
+        name: h.name,
+        icon: h.icon,
+        color: h.color,
+        goalValue: h.goalValue,
+        createdAt: h.createdAt,
+        deletedAt: h.deletedAt,
+        reminderTime: h.reminderTime,
+        isArchived: archived,
+      ) : h
+    ).toList());
+  }
 }
 
 // Fetches logs and groups them by Habit ID
@@ -632,6 +650,13 @@ final focusSessionSaverProvider = Provider((ref) {
         habitId: habitId,
       );
       ref.invalidate(focusHistoryProvider);
+      
+      // If session was linked to a habit, also toggle the habit log for today automatically
+      if (habitId != null) {
+        final now = DateTime.now();
+        final normalized = DateTime(now.year, now.month, now.day);
+        await ref.read(habitToggleProvider)(habitId, normalized);
+      }
     } catch (e, s) {
       await ref.read(loggerProvider).error('focusSessionSaverProvider: Save failed', e, s);
       rethrow;

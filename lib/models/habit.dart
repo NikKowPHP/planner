@@ -7,7 +7,8 @@ class Habit {
   final int goalValue;
   final DateTime createdAt;
   final DateTime? deletedAt;
-  final String? reminderTime; // Format: "HH:mm"
+  final String? reminderTime;
+  final bool isArchived;
 
   Habit({
     required this.id,
@@ -18,7 +19,8 @@ class Habit {
     this.goalValue = 1,
     required this.createdAt,
     this.deletedAt,
-    this.reminderTime, // New
+    this.reminderTime,
+    this.isArchived = false,
   });
 
   factory Habit.fromJson(Map<String, dynamic> json) {
@@ -31,8 +33,24 @@ class Habit {
       goalValue: json['goal_value'] ?? 1,
       createdAt: DateTime.parse(json['created_at']),
       deletedAt: json['deleted_at'] != null ? DateTime.parse(json['deleted_at']) : null,
-      reminderTime: json['reminder_time'], // New
+      reminderTime: json['reminder_time'],
+      isArchived: json['is_archived'] ?? false,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'user_id': userId,
+      'name': name,
+      'icon': icon,
+      'color': color,
+      'goal_value': goalValue,
+      'created_at': createdAt.toIso8601String(),
+      'deleted_at': deletedAt?.toIso8601String(),
+      'reminder_time': reminderTime,
+      'is_archived': isArchived,
+    };
   }
 }
 
